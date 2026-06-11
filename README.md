@@ -72,10 +72,10 @@ Every team gets a strength rating. Each matchup is converted into win/draw/loss 
 <a name="book"></a>
 ## 📘 From the book
 
-This project applies the techniques from **[*Soccer Analytics with Machine Learning*](<BUY-LINK>)** (O'Reilly, 2026) by Haipeng Gao, Ari Joury, Weining Shen, and Guanyu Hu — Poisson and regression models (Ch 4), classification (Ch 5), tree-based methods (Ch 6), neural networks (Ch 7), team ratings (Ch 8), and market/odds analysis (Ch 9).
+This project applies the techniques from **[*Soccer Analytics with Machine Learning*](https://learning.oreilly.com/library/view/soccer-analytics-with/9781098181109/)** (O'Reilly, 2026) by Haipeng Gao, Ari Joury, Weining Shen, and Guanyu Hu — Poisson and regression models (Ch 4), classification (Ch 5), tree-based methods (Ch 6), neural networks (Ch 7), team ratings (Ch 8), and market/odds analysis (Ch 9).
 
-- 📖 **Get the book:** `<BUY-LINK>`
-- 🧑‍💻 **Companion code for the whole book** (with worked StatsBomb examples): `<BOOK-REPO-URL>`
+- 📖 **Get the book:** [O'Reilly](https://learning.oreilly.com/library/view/soccer-analytics-with/9781098181109/)
+- 🧑‍💻 **Companion code for the whole book** (with worked StatsBomb examples): [github.com/SoccerAnalyticsML/Soccer-Analytics-with-Machine-Learning](https://github.com/SoccerAnalyticsML/Soccer-Analytics-with-Machine-Learning)
 
 If this repo was useful, the book is where you learn to build every one of these models from scratch.
 
