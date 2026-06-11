@@ -1,0 +1,105 @@
+date,group_or_round,team1,team2
+2026-06-11,A,Mexico,South Africa
+2026-06-11,A,South Korea,UEFA Path D winner
+2026-06-18,A,UEFA Path D winner,South Africa
+2026-06-18,A,Mexico,South Korea
+2026-06-24,A,UEFA Path D winner,Mexico
+2026-06-24,A,South Africa,South Korea
+2026-06-12,B,Canada,UEFA Path A winner
+2026-06-13,B,Qatar,Switzerland
+2026-06-18,B,Switzerland,UEFA Path A winner
+2026-06-18,B,Canada,Qatar
+2026-06-24,B,Switzerland,Canada
+2026-06-24,B,UEFA Path A winner,Qatar
+2026-06-13,C,Brazil,Morocco
+2026-06-13,C,Haiti,Scotland
+2026-06-19,C,Scotland,Morocco
+2026-06-19,C,Brazil,Haiti
+2026-06-24,C,Scotland,Brazil
+2026-06-24,C,Morocco,Haiti
+2026-06-12,D,United States,Paraguay
+2026-06-13,D,Australia,UEFA Path C winner
+2026-06-19,D,United States,Australia
+2026-06-19,D,UEFA Path C winner,Paraguay
+2026-06-25,D,UEFA Path C winner,United States
+2026-06-25,D,Paraguay,Australia
+2026-06-14,E,Germany,Curaçao
+2026-06-14,E,Ivory Coast,Ecuador
+2026-06-20,E,Germany,Ivory Coast
+2026-06-20,E,Ecuador,Curaçao
+2026-06-25,E,Curaçao,Ivory Coast
+2026-06-25,E,Ecuador,Germany
+2026-06-14,F,Netherlands,Japan
+2026-06-14,F,UEFA Path B winner,Tunisia
+2026-06-20,F,Netherlands,UEFA Path B winner
+2026-06-20,F,Tunisia,Japan
+2026-06-25,F,Japan,UEFA Path B winner
+2026-06-25,F,Tunisia,Netherlands
+2026-06-15,G,Belgium,Egypt
+2026-06-15,G,Iran,New Zealand
+2026-06-21,G,Belgium,Iran
+2026-06-21,G,New Zealand,Egypt
+2026-06-26,G,Egypt,Iran
+2026-06-26,G,New Zealand,Belgium
+2026-06-15,H,Spain,Cape Verde
+2026-06-15,H,Saudi Arabia,Uruguay
+2026-06-21,H,Spain,Saudi Arabia
+2026-06-21,H,Uruguay,Cape Verde
+2026-06-26,H,Cape Verde,Saudi Arabia
+2026-06-26,H,Uruguay,Spain
+2026-06-16,I,France,Senegal
+2026-06-16,I,IC Path 2 winner,Norway
+2026-06-22,I,France,IC Path 2 winner
+2026-06-22,I,Norway,Senegal
+2026-06-26,I,Norway,France
+2026-06-26,I,Senegal,IC Path 2 winner
+2026-06-16,J,Argentina,Algeria
+2026-06-16,J,Austria,Jordan
+2026-06-22,J,Argentina,Austria
+2026-06-22,J,Jordan,Algeria
+2026-06-27,J,Algeria,Austria
+2026-06-27,J,Jordan,Argentina
+2026-06-17,K,Portugal,IC Path 1 winner
+2026-06-17,K,Uzbekistan,Colombia
+2026-06-23,K,Portugal,Uzbekistan
+2026-06-23,K,Colombia,IC Path 1 winner
+2026-06-27,K,Colombia,Portugal
+2026-06-27,K,IC Path 1 winner,Uzbekistan
+2026-06-17,L,England,Croatia
+2026-06-17,L,Ghana,Panama
+2026-06-23,L,England,Ghana
+2026-06-23,L,Panama,Croatia
+2026-06-27,L,Panama,England
+2026-06-27,L,Croatia,Ghana
+2026-06-28,Round of 32,2A,2B
+2026-06-29,Round of 32,1E,3A/B/C/D/F
+2026-06-29,Round of 32,1F,2C
+2026-06-29,Round of 32,1C,2F
+2026-06-30,Round of 32,1I,3C/D/F/G/H
+2026-06-30,Round of 32,2E,2I
+2026-06-30,Round of 32,1A,3C/E/F/H/I
+2026-07-01,Round of 32,1L,3E/H/I/J/K
+2026-07-01,Round of 32,1D,3B/E/F/I/J
+2026-07-01,Round of 32,1G,3A/E/H/I/J
+2026-07-02,Round of 32,2K,2L
+2026-07-02,Round of 32,1H,2J
+2026-07-02,Round of 32,1B,3E/F/G/I/J
+2026-07-03,Round of 32,1J,2H
+2026-07-03,Round of 32,1K,3D/E/I/J/L
+2026-07-03,Round of 32,2D,2G
+2026-07-04,Round of 16,W74,W77
+2026-07-04,Round of 16,W73,W75
+2026-07-05,Round of 16,W76,W78
+2026-07-05,Round of 16,W79,W80
+2026-07-06,Round of 16,W83,W84
+2026-07-06,Round of 16,W81,W82
+2026-07-07,Round of 16,W86,W88
+2026-07-07,Round of 16,W85,W87
+2026-07-09,Quarter-final,W89,W90
+2026-07-10,Quarter-final,W93,W94
+2026-07-11,Quarter-final,W91,W92
+2026-07-11,Quarter-final,W95,W96
+2026-07-14,Semi-final,W97,W98
+2026-07-15,Semi-final,W99,W100
+2026-07-18,Match for third place,L101,L102
+2026-07-19,Final,W101,W102

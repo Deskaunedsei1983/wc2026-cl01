@@ -1,0 +1,12 @@
+model,top_pick,top_pct
+elo,Spain,28.0
+poisson,Spain,26.6
+negbin,Spain,26.3
+logit,Spain,26.9
+knn,Spain,14.9
+rf,Argentina,12.9
+xgb,Argentina,15.3
+nn,France,11.5
+colley,Netherlands,18.0
+pagerank,Spain,29.4
+market,Spain,16.8

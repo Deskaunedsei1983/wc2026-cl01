@@ -1,0 +1,6 @@
+model,cv_logloss,cv_accuracy
+logit,1.001,0.542
+rf,1.011,0.556
+knn,1.013,0.525
+nn,1.115,0.525
+xgb,1.169,0.483
