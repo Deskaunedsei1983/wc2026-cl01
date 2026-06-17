@@ -125,8 +125,70 @@ def wdl(a, b, ratings=STRENGTH):
 def modal_score(a, b, ratings=STRENGTH):
     P, la, lb = scoreline(a, b, ratings); n = P.shape[0]; i, j = divmod(int(np.argmax(P)), n)
     return f"{i}:{j}", P[i, j]*100
-print(f"Modell kalibriert auf {len(M)} Spielen ·  λ(Gleichstärke) = {np.exp(B0):.2f} Tore")
+
+# --- rating models computed from the same 358 results (Ch 8) ---
+def _colley():
+    teams = sorted(set(M.home_team)|set(M.away_team)); idx = {t:i for i,t in enumerate(teams)}; n=len(teams)
+    C = np.eye(n)*2; b = np.ones(n)
+    for _, r in M.iterrows():
+        i,j = idx[r.home_team], idx[r.away_team]; C[i,i]+=1; C[j,j]+=1; C[i,j]-=1; C[j,i]-=1
+        wi = 1.0 if r.res>0 else (0.5 if r.res==0 else 0.0); b[i]+=wi-0.5; b[j]+=(1-wi)-0.5
+    x = np.linalg.solve(C, b); return {t:x[idx[t]] for t in teams}
+def _pagerank(d=0.85, it=100):
+    teams = sorted(set(M.home_team)|set(M.away_team)); idx = {t:i for i,t in enumerate(teams)}; n=len(teams)
+    W = np.zeros((n,n))
+    for _, r in M.iterrows():
+        i,j = idx[r.home_team], idx[r.away_team]
+        if r.res>0: W[j,i]+=1
+        elif r.res<0: W[i,j]+=1
+        else: W[i,j]+=.5; W[j,i]+=.5
+    cs = W.sum(1,keepdims=True); cs[cs==0]=1; T=W/cs; pr=np.ones(n)/n
+    for _ in range(it): pr = (1-d)/n + d*(T.T@pr)
+    return {t:pr[idx[t]] for t in teams}
+def _to_elo(rat):
+    v = np.array(list(rat.values())); mu, sd = v.mean(), v.std()+1e-9
+    return {t:(1850+(rat[t]-mu)/sd*130) if t in rat else STRENGTH[t] for t in TEAMS}
+COLLEY = _to_elo(_colley()); PAGER = _to_elo(_pagerank())
+
+# --- the five match models that yield win/draw/loss directly ---
+def model_wdl(a, b):
+    """P(Sieg/Remis/Niederlage) je Modell als dict {Name: (w, d, l)}."""
+    out = {"Poisson": wdl(a, b, STRENGTH)}
+    P = scoreline(a, b, STRENGTH, alpha)[0]
+    out["Neg.Binom"] = (np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum())
+    da = STRENGTH[a]-STRENGTH[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
+    out["Elo"]      = ((1-pdr)*we, pdr, (1-pdr)*(1-we))
+    out["Colley"]   = wdl(a, b, COLLEY)
+    out["PageRank"] = wdl(a, b, PAGER)
+    return out
+MATCH_MODELS = ["Poisson", "Neg.Binom", "Elo", "Colley", "PageRank"]
+def wdl_consensus(a, b):
+    arr = np.array(list(model_wdl(a, b).values())).mean(0); return arr/arr.sum()
+
+SIM_MODEL = "Poisson-Tor-Sampling (Tore ~ Poisson(λ) je Team)"
+print(f"Kalibriert auf {len(M)} Spielen · λ(Gleichstärke) = {np.exp(B0):.2f} Tore · NB-α = {alpha:.3f}")
+print("W/U/N-Konsens-Modelle :", ", ".join(MATCH_MODELS))
+print("Wahrscheinlichstes Ergebnis: Modus (argmax) der Poisson-Ergebnis-Matrix")
+print("Simulationsmodell (Titel)  :", SIM_MODEL)
 ''')
+
+md(r"""### 1.1 Welche Algorithmen stecken drin? (Details)
+
+| Baustein | Algorithmus | Idee |
+|----------|-------------|------|
+| **Erwartete Tore λ** | Poisson-GLM (Ch 4) | λ = exp(β₀ + β₁·Stärkedifferenz), kalibriert auf 358 Spielen |
+| **W/U/N-Konsens** | Mittel aus **5 Modellen** | Poisson · Negative Binomial · Elo · Colley · PageRank |
+| **Wahrscheinlichstes Ergebnis** | Modus der Poisson-Matrix | argmax über P(h:a) = Poisson(h\|λ₁)·Poisson(a\|λ₂) |
+| **Titel-Simulation** | Poisson-Tor-Sampling | je Spiel Tore ~ Poisson(λ), 8 000 ganze Turniere |
+| **Gruppendritte → Bracket** | gültiges Matching | acht beste Dritte auf die erlaubten R32-Slots |
+
+> **Wichtig zum „wahrscheinlichsten Ergebnis":** Das ist der **Modus** (das einzelne
+> häufigste exakte Resultat), **nicht** der Mittelwert. Bei Poisson verteilt sich die
+> Wahrscheinlichkeit über viele hohe Resultate, daher ist der Modus meist knapp
+> (1:0, 2:0). Die **Dominanz** liest man an **λ** (erwartete Tore) und an **W/U/N** ab —
+> siehe die Erklärung unter den nächsten Spielen.
+
+Jede Ausgabe-Tabelle nennt in ihrer Überschrift, welche Algorithmen sie verwendet.""")
 
 # ── 2. Live data ────────────────────────────────────────────────────────────
 md(r"""## 2. Aktuelle WM-2026-Daten laden
@@ -210,25 +272,18 @@ Die nächsten noch nicht gespielten Partien mit Sieg/Remis/Niederlage-Konsens
 (Mittel aus Poisson, Negative Binomial, Elo, Colley, PageRank) und dem
 wahrscheinlichsten exakten Ergebnis (Poisson).""")
 
-code(r'''def wdl_consensus(a, b):
-    mods = [wdl(a,b,STRENGTH),                                   # Poisson
-            (lambda P: (np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum()))(scoreline(a,b,STRENGTH,alpha)[0])]
-    for R in (STRENGTH,):                                        # Elo (= Stärke) als Rating
-        da = R[a]-R[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
-        mods.append(((1-pdr)*we, pdr, (1-pdr)*(1-we)))
-    arr = np.array(mods).mean(0); return arr/arr.sum()
-
-def next_matches(sched, k=12):
+code(r'''def next_matches(sched, k=12):
     up = sched[~sched.played].copy()
-    up = up[up.team1.isin(STRENGTH) & up.team2.isin(STRENGTH)]
-    up = up.sort_values("date").head(k)
+    up = up[up.team1.isin(STRENGTH) & up.team2.isin(STRENGTH)].sort_values("date").head(k)
     out = []
     for _, m in up.iterrows():
-        a, b = m.team1, m.team2; w, d, l = wdl_consensus(a, b); s, p = modal_score(a, b)
+        a, b = m.team1, m.team2; w, d, l = wdl_consensus(a, b)
+        la, lb = lam(a, b); s, p = modal_score(a, b)
         tag = m.group if isinstance(m.group,str) and m.group else m["round"]
         out.append({"Datum":m.date,"Runde":tag,"Begegnung":f"{a} – {b}",
-                    f"P(Sieg 1)":w*100,"P(Remis)":d*100,"P(Sieg 2)":l*100,
-                    "wahrsch. Ergebnis":s,"P(Erg.)":p})
+                    "Ø Tore (λ)":f"{la:.1f} : {lb:.1f}",
+                    "P(Sieg 1)":w*100,"P(Remis)":d*100,"P(Sieg 2)":l*100,
+                    "wahrsch. Erg.":s,"P(Erg.)":p})
     return pd.DataFrame(out)
 
 nxt = next_matches(sched, 12)
@@ -236,8 +291,41 @@ nxt = next_matches(sched, 12)
    .format({"P(Sieg 1)":"{:.0f}%","P(Remis)":"{:.0f}%","P(Sieg 2)":"{:.0f}%","P(Erg.)":"{:.0f}%"})
    .background_gradient(cmap="Greens", subset=["P(Sieg 1)"])
    .background_gradient(cmap="Reds",   subset=["P(Sieg 2)"])
-   .set_caption("Nächste Spiele — Prognose (Konsens W/U/N + wahrscheinlichstes Ergebnis)"))
+   .set_caption("Nächste Spiele — W/U/N-Konsens aus 5 Modellen (Poisson, Neg.Binom, Elo, Colley, PageRank). "
+                "Ø Tore (λ) = erwartete Tore (Poisson). wahrsch. Erg. = wahrscheinlichstes exaktes Ergebnis (Modus)."))
 ''')
+
+md(r"""### 4.1 Algorithmus-Details: die fünf Modelle für das nächste Spiel
+
+Damit transparent ist, *woraus* der Konsens entsteht: hier die einzelne
+W/U/N-Einschätzung jedes der fünf Modelle für die nächste anstehende Partie.""")
+code(r'''upcoming = (sched[~sched.played & sched.team1.isin(STRENGTH) & sched.team2.isin(STRENGTH)]
+            .sort_values("date"))
+a0, b0 = upcoming.iloc[0].team1, upcoming.iloc[0].team2
+detail = pd.DataFrame(model_wdl(a0, b0), index=["Sieg","Unentschieden","Niederlage"]).T * 100
+detail.index.name = "Modell"
+la0, lb0 = lam(a0, b0)
+print(f"Nächstes Spiel: {a0} vs {b0}   ·   erwartete Tore λ = {la0:.2f} : {lb0:.2f}")
+(detail.style.format("{:.1f}%")
+   .background_gradient(cmap="Greens",  subset=["Sieg"])
+   .background_gradient(cmap="Oranges", subset=["Unentschieden"])
+   .background_gradient(cmap="Reds",    subset=["Niederlage"])
+   .set_caption(f"{a0} vs {b0} — Sieg/Remis/Niederlage je Algorithmus (Spalten = aus Sicht von {a0})"))
+''')
+
+md(r"""### 4.2 Warum stehen da meist knappe Ergebnisse (1:0, 2:0)?
+
+Die Spalte **„wahrsch. Erg."** zeigt das **wahrscheinlichste *einzelne* exakte
+Ergebnis** (den **Modus**) — nicht den Mittelwert. Beispiel **Brasilien – Haiti**:
+
+* erwartete Tore **λ = 2,4 : 0,6**, Sieg-Wahrscheinlichkeit **77 %**,
+* aber die Wahrscheinlichkeit verteilt sich: 2:0 (14 %), 1:0 (12 %), 3:0 (11 %),
+  2:1 (9 %), 1:1 (7 %), 3:1 (7 %) …
+
+Kein *einzelnes* hohes Ergebnis hat so viel Masse wie 2:0 — deshalb ist der Modus
+fast immer knapp, **obwohl** Brasilien klar dominiert (≥3 Tore Unterschied in ~31 %
+der Fälle). Die echte Überlegenheit liest man daher an **λ** und an **W/U/N** ab,
+nicht am Modus. Wer das „typische" Ergebnis möchte, rundet λ (≈ 2–3 : 0–1).""")
 
 # ── 5. Official bracket ─────────────────────────────────────────────────────
 md(r"""## 5. Das offizielle K.-o.-Bracket
@@ -355,7 +443,7 @@ code(r'''pcols = ["Achtelfinale (R32)","R16","Viertelfinale","Halbfinale","Final
    .format({**{c:"{:.1f}%" for c in pcols}, "Stärke":"{:.0f}"})
    .background_gradient(cmap="YlOrRd", subset=["Titel"])
    .background_gradient(cmap="Blues",  subset=["Achtelfinale (R32)","Viertelfinale"])
-   .set_caption(f"Aktualisierte Turnier-Wahrscheinlichkeiten · {N_SIM:,} Simulationen (gespielte Ergebnisse fix)"))
+   .set_caption(f"Aktualisierte Turnier-Wahrscheinlichkeiten · {N_SIM:,} Simulationen mit {SIM_MODEL} (gespielte Ergebnisse fix)"))
 ''')
 
 md(r"""### 6.2 Titelchancen jetzt — und Veränderung zur Vorhersage vor dem Turnier
@@ -413,16 +501,18 @@ code(r'''def project_bracket(sched):
     for m, s1, s2 in R32:
         t1 = tmap[m] if s1.startswith("3:") else pos[s1]
         t2 = tmap[m] if s2.startswith("3:") else pos[s2]
-        w, d, l = wdl_consensus(t1, t2); s, p = modal_score(t1, t2)
+        w, d, l = wdl_consensus(t1, t2); s, p = modal_score(t1, t2); la, lb = lam(t1, t2)
         fav = t1 if w>=l else t2
-        rows.append({"R32":m,"Begegnung":f"{t1} – {t2}","P(Sieg 1)":w*100,"P(Remis)":d*100,
-                     "P(Sieg 2)":l*100,"Favorit":fav,"wahrsch. Ergebnis":s})
+        rows.append({"R32":m,"Begegnung":f"{t1} – {t2}","Ø Tore (λ)":f"{la:.1f} : {lb:.1f}",
+                     "P(Sieg 1)":w*100,"P(Remis)":d*100,
+                     "P(Sieg 2)":l*100,"Favorit":fav,"wahrsch. Erg.":s})
     return pd.DataFrame(rows)
 
 all_grp_done = len(grp_played) == n_grp
 bracket = project_bracket(sched)
 cap = ("ECHTES Round of 32 (alle Gruppen entschieden)" if all_grp_done
        else "Projiziertes Round of 32 (Stand heute — ändert sich mit den Restspielen)")
+cap += " · W/U/N-Konsens aus 5 Modellen · λ = erwartete Tore (Poisson)"
 (bracket.style.hide(axis="index")
    .format({"P(Sieg 1)":"{:.0f}%","P(Remis)":"{:.0f}%","P(Sieg 2)":"{:.0f}%"})
    .background_gradient(cmap="Greens", subset=["P(Sieg 1)"])
@@ -430,8 +520,49 @@ cap = ("ECHTES Round of 32 (alle Gruppen entschieden)" if all_grp_done
    .set_caption(cap))
 ''')
 
-# ── 8. What to update ───────────────────────────────────────────────────────
-md(r"""## 8. Was muss aktualisiert werden?
+# ── 7.5 Save timestamped results ────────────────────────────────────────────
+md(r"""## 8. Ergebnisse mit Zeitstempel speichern (zum Vergleichen)
+
+Jeder Lauf wird unter `results/<Zeitstempel>_*.csv` abgelegt — Tabellen,
+Prognosen, Wahrscheinlichkeiten und Bracket. Zusätzlich wird die Titelchance je
+Team an `results/title_history.csv` angehängt, sodass man die Entwicklung über
+mehrere Läufe (Spieltage) direkt vergleichen kann.""")
+code(r'''from datetime import datetime
+RESULTS = Path("results"); RESULTS.mkdir(exist_ok=True)
+STAMP = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+
+meta = pd.Series({
+    "timestamp": STAMP, "quelle": source,
+    "gespielte_gruppenspiele": int(len(grp_played)), "gruppenspiele_gesamt": int(n_grp),
+    "n_sim": int(N_SIM), "match_modelle": ", ".join(MATCH_MODELS), "sim_modell": SIM_MODEL,
+})
+saved = []
+for name, df in [("standings", tables), ("next_matches", nxt),
+                 ("probabilities", prob), ("bracket", bracket)]:
+    fp = RESULTS / f"{STAMP}_{name}.csv"; df.to_csv(fp, index=False); saved.append(fp.name)
+meta.to_csv(RESULTS / f"{STAMP}_run_info.csv", header=False)
+
+# long-format title history for easy time comparison
+hist = prob[["Team", "Titel"]].copy(); hist.insert(0, "run", STAMP)
+hpath = RESULTS / "title_history.csv"
+hist.to_csv(hpath, mode="a", header=not hpath.exists(), index=False)
+
+print(f"Lauf {STAMP} gespeichert in results/:")
+for s in saved + [f"{STAMP}_run_info.csv"]: print("   -", s)
+print("   - title_history.csv  (Titelchancen angehängt — eine Zeile je Team und Lauf)")
+
+# Vergleich: wie haben sich die Titelchancen über die bisherigen Läufe entwickelt?
+comp = (pd.read_csv(hpath).pivot_table(index="Team", columns="run", values="Titel")
+          .reindex(prob.head(8).Team))
+if comp.shape[1] > 1:
+    print("\nTitelchancen-Verlauf (Top 8, %):")
+    display(comp.round(1))
+else:
+    print("\n(Beim nächsten Lauf erscheint hier ein Verlaufsvergleich über die Zeit.)")
+''')
+
+# ── 9. What to update ───────────────────────────────────────────────────────
+md(r"""## 9. Was muss aktualisiert werden?
 
 Damit die Prognosen aktuell und korrekt bleiben:
 
@@ -447,7 +578,7 @@ Damit die Prognosen aktuell und korrekt bleiben:
 Das meiste erledigt **`refresh_data.py`** automatisch. Nach dem Aktualisieren
 einfach *Run All* — Tabellen, Prognosen und Titelchancen rechnen sich neu.""")
 
-md(r"""## 9. Können die Datendateien heruntergeladen werden?
+md(r"""## 10. Können die Datendateien heruntergeladen werden?
 
 **Ja.** Alle Daten stammen aus dem öffentlichen **openfootball**-Projekt (Public
 Domain) und werden über `raw.githubusercontent.com` geladen:

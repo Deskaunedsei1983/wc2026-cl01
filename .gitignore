@@ -4,3 +4,8 @@ __pycache__/
 .DS_Store
 .venv/
 venv/
+
+# timestamped run outputs from wc2026_live_update.ipynb (kept locally for comparison)
+results/
+# refreshed training files written by `refresh_data.py --training` (review before replacing)
+data/*_refreshed.csv
