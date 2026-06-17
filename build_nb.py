@@ -495,6 +495,124 @@ ax.set_xticks(K); ax.set_xlabel("Gesamttore im Spiel"); ax.set_ylabel("Wahrschei
 ax.set_title(f"{a} vs {b} — Verteilung der Gesamttore"); ax.legend()
 plt.tight_layout(); plt.savefig("nb_total_goals.png"); plt.show()""")
 
+# ── Section 5.4–5.6: all group matches, scorelines by algorithm ──────────────
+md(r"""### 5.4 Alle 72 Gruppenspiele — wahrscheinlichstes Ergebnis je Algorithmus
+
+Für jedes der **72 Gruppenspiele** (12 Gruppen × 6 Partien) das
+**wahrscheinlichste exakte Ergebnis** und dessen Wahrscheinlichkeit — pro
+**Algorithmus in eigenen Spalten** (Poisson, Negative Binomial, Colley, PageRank).
+
+> Nur **Tormodelle** liefern exakte Ergebnisse. Die reinen W/U/N-Klassifikatoren
+> (Logit, KNN, RandomForest, XGBoost, NN) sagen *keine* Tore voraus und tauchen
+> hier daher nicht auf. **Elo** nutzt denselben Stärke-Input wie Poisson und
+> liefert identische Ergebnisse — deshalb nicht doppelt aufgeführt. Colley und
+> PageRank speisen ihre aus den Resultaten *berechneten* Ratings in dieselbe
+> Tor-Kennlinie, weichen also stellenweise ab.""")
+
+code(r'''def scoreline_from_ratings(a, b, ratings, dispersion=0.0, maxg=7):
+    """Ergebnis-Matrix aus beliebigen Team-Ratings via dieselbe Poisson-Tor-Kennlinie."""
+    d = ratings[a] - ratings[b]
+    la, lb = float(np.exp(B0 + B1*d)), float(np.exp(B0 - B1*d))
+    g = np.arange(maxg+1)
+    def pmf(l):
+        if dispersion > 1e-6:
+            rr = 1.0/dispersion; return nbinom.pmf(g, rr, rr/(rr+l))
+        return pois.pmf(g, l)
+    P = np.outer(pmf(la), pmf(lb)); P /= P.sum()
+    return P, la, lb
+
+def modal_score(a, b, ratings, dispersion=0.0):
+    """Wahrscheinlichstes exaktes Ergebnis als h:a plus Wahrscheinlichkeit in Prozent."""
+    P, la, lb = scoreline_from_ratings(a, b, ratings, dispersion)
+    n = P.shape[0]; i, j = divmod(int(np.argmax(P)), n)
+    return f"{i}:{j}", P[i, j]*100
+
+# scoreline-fähige Algorithmen:  Name -> (Rating-Dict, Dispersion)
+SCORE_ALGOS = {
+    "Poisson":   (STRENGTH, 0.0),
+    "Neg.Binom": (STRENGTH, alpha),
+    "Colley":    (COLLEY,   0.0),
+    "PageRank":  (PAGER,    0.0),
+}
+
+rows = []
+for grp, teams in GROUPS.items():
+    for x in range(4):
+        for y in range(x+1, 4):
+            a, b = teams[x], teams[y]
+            row = {("Spiel", "Gr."): grp, ("Spiel", "Begegnung"): f"{a} – {b}"}
+            for nm, (R, disp) in SCORE_ALGOS.items():
+                s, p = modal_score(a, b, R, disp)
+                row[(nm, "Erg.")] = s
+                row[(nm, "P%")]   = round(p, 1)
+            rows.append(row)
+group_scores = pd.DataFrame(rows)
+group_scores.columns = pd.MultiIndex.from_tuples(group_scores.columns)
+group_scores.to_csv("group_match_scorelines.csv", index=False)
+
+erg_cols = [(nm, "Erg.") for nm in SCORE_ALGOS]
+agree = int((group_scores[erg_cols].nunique(axis=1) == 1).sum())
+print(f"{len(group_scores)} Gruppenspiele · gespeichert -> group_match_scorelines.csv")
+print(f"In {agree}/{len(group_scores)} Spielen sind sich alle vier Algorithmen "
+      f"beim exakten Ergebnis einig.")
+
+pcols = [(nm, "P%") for nm in SCORE_ALGOS]
+(group_scores.style.hide(axis="index")
+   .format({c: "{:.1f}" for c in pcols})
+   .background_gradient(cmap="Blues", subset=pcols)
+   .set_caption("Wahrscheinlichstes exaktes Ergebnis je Gruppenspiel und Algorithmus "
+                "(P% = Wahrscheinlichkeit genau dieses Ergebnisses, neutraler Platz)"))
+''')
+
+md(r"""### 5.5 Gestaffelt — die drei wahrscheinlichsten Ergebnisse je Spiel (Poisson)
+
+Statt nur des Top-Ergebnisses hier die **Top 3** je Partie, nach
+Wahrscheinlichkeit gestaffelt, plus die erwarteten Tore λ.""")
+
+code(r'''def top_scores(a, b, ratings=STRENGTH, dispersion=0.0, k=3):
+    """Top-k wahrscheinlichste exakte Ergebnisse plus erwartete Tore."""
+    P, la, lb = scoreline_from_ratings(a, b, ratings, dispersion)
+    n = P.shape[0]
+    flat = sorted(((P[i, j], i, j) for i in range(n) for j in range(n)), reverse=True)
+    return [(f"{i}:{j}", p*100) for p, i, j in flat[:k]], la, lb
+
+rows = []
+for grp, teams in GROUPS.items():
+    for x in range(4):
+        for y in range(x+1, 4):
+            a, b = teams[x], teams[y]
+            tops, la, lb = top_scores(a, b, k=3)
+            row = {"Gr.": grp, "Begegnung": f"{a} – {b}", "λ (erw. Tore)": f"{la:.2f} : {lb:.2f}"}
+            for r, (s, p) in enumerate(tops, 1):
+                row[f"{r}. Ergebnis"] = f"{s}   ({p:.0f}%)"
+            rows.append(row)
+poisson_top3 = pd.DataFrame(rows)
+(poisson_top3.style.hide(axis="index")
+   .set_caption("Top-3 wahrscheinlichste Ergebnisse je Gruppenspiel — Poisson-Tormodell"))
+''')
+
+md(r"""### 5.6 Welche Gruppenspiele sind am berechenbarsten?
+
+Je höher die Wahrscheinlichkeit des wahrscheinlichsten Ergebnisses, desto
+eindeutiger die Partie. Die 15 Spiele mit dem klarsten Favoriten-Ergebnis.""")
+
+code(r'''gp  = group_scores
+lab = (gp[("Spiel", "Gr.")].astype(str) + ":  " + gp[("Spiel", "Begegnung")].astype(str)).values
+pp  = gp[("Poisson", "P%")].astype(float).values
+sc  = gp[("Poisson", "Erg.")].astype(str).values
+o   = np.argsort(pp)[::-1][:15][::-1]
+fig, ax = plt.subplots(figsize=(10.5, 7.5))
+ax.barh(range(len(o)), pp[o], color=NAVY, zorder=3)
+ax.set_yticks(range(len(o))); ax.set_yticklabels([lab[i] for i in o], fontsize=9)
+for k, i in enumerate(o):
+    ax.text(pp[i]+0.1, k, f"{sc[i]}  ({pp[i]:.0f}%)", va="center", fontsize=9)
+ax.set_xlabel("Wahrscheinlichkeit des wahrscheinlichsten Ergebnisses (%)")
+ax.set_title("Die 15 berechenbarsten Gruppenspiele\n"
+             "wahrscheinlichstes exaktes Ergebnis · Poisson-Tormodell", loc="left")
+ax.set_xlim(0, pp[o].max()*1.25)
+plt.tight_layout(); plt.savefig("nb_group_predictable.png"); plt.show()
+''')
+
 # ── Section 6: Tournament ───────────────────────────────────────────────────
 md(r"""# Teil C — Turnier-Simulation: Wer gewinnt die WM?
 

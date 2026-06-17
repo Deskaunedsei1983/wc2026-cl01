@@ -53,7 +53,7 @@ python build_article2_extras.py  # model-agreement heatmap + pipeline schematic
 
 The notebook [`world_cup_2026_prediction.ipynb`](world_cup_2026_prediction.ipynb) walks through the single-model version step by step.
 
-For **match win/draw/loss predictions** and a **goal-to-goal (exact-scoreline) analysis** — correct-score heatmaps, expected goals, most-likely results, over/under and BTTS, plus the consensus title simulation — see [`wc2026_match_and_scoreline_analysis.ipynb`](wc2026_match_and_scoreline_analysis.ipynb):
+For **match win/draw/loss predictions** and a **goal-to-goal (exact-scoreline) analysis** — correct-score heatmaps, expected goals, most-likely results, over/under and BTTS, a **per-algorithm most-likely-scoreline table for all 72 group matches** (`group_match_scorelines.csv`), plus the consensus title simulation — see [`wc2026_match_and_scoreline_analysis.ipynb`](wc2026_match_and_scoreline_analysis.ipynb):
 
 ```bash
 jupyter nbconvert --to notebook --execute --inplace wc2026_match_and_scoreline_analysis.ipynb
