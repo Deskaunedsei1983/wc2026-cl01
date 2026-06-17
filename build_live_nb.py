@@ -380,10 +380,11 @@ def _winner(a, b):
         return a if rng.random() < 0.5 + (STRENGTH[a]-STRENGTH[b])/4000 else b
     return a if x > y else b
 
-def one_sim():
+def one_sim(pk=None):
+    pk = played_key if pk is None else pk
     st = {g:{t:[0,0,0] for t in GROUPS[g]} for g in GROUPS}   # pts, gd, gf
     for g, a, b in fixtures:
-        if (g,a,b) in played_key: x, y = played_key[(g,a,b)]
+        if (g,a,b) in pk: x, y = pk[(g,a,b)]
         else:
             la, lb = lam(a,b); x, y = rng.poisson(la), rng.poisson(lb)
         st[g][a][1]+=x-y; st[g][a][2]+=x; st[g][b][1]+=y-x; st[g][b][2]+=y
@@ -472,6 +473,51 @@ ax.set_xlim(0, top["Titel"].max()*1.25)
 plt.tight_layout(); plt.savefig("nb_live_title_odds.png"); plt.show()
 ''')
 
+md(r"""### 6.3 Verlauf der Titelchancen über die Spieltage
+
+Für jeden bereits gespielten Spieltag (Datum) rechnen wir die Titelchance neu —
+mit *nur* den bis dahin bekannten Ergebnissen, der Rest simuliert (gleiches
+Poisson-Modell, 3 000 Läufe). So sieht man, wie die Resultate die Favoriten
+verschoben haben. „Start" = vor dem ersten Spiel (reine Vorhersage).""")
+code(r'''def sim_titles(pk, n=3000):
+    c = np.zeros(len(TEAMS))
+    for _ in range(n):
+        c[ix[one_sim(pk)["champ"][0]]] += 1
+    return c/n*100
+
+N_EVO = 3000
+top_teams = prob.head(6)["Team"].tolist()
+played_dates = sorted(grp_played["date"].astype(str).unique())
+cutoffs = [("Start", None)] + [(d[5:], d) for d in played_dates]   # label ohne Jahr
+
+rows = []
+for label, cut in cutoffs:
+    if cut is None:
+        pk = {}
+    else:
+        sub = grp_played[grp_played["date"].astype(str) <= cut]
+        pk = {(m.group, m.team1, m.team2): (int(m.score1), int(m.score2))
+              for _, m in sub.iterrows() if m.team1 in STRENGTH and m.team2 in STRENGTH}
+    odds = sim_titles(pk, N_EVO)
+    rows.append({"Stand": label, **{t: round(odds[ix[t]], 1) for t in top_teams}})
+evolution = pd.DataFrame(rows)
+
+fig, ax = plt.subplots(figsize=(11, 6))
+x = range(len(evolution))
+for t in top_teams:
+    ax.plot(x, evolution[t], marker="o", lw=2.2, label=t)
+ax.set_xticks(list(x)); ax.set_xticklabels(evolution["Stand"], rotation=0)
+ax.set_ylabel("Titelwahrscheinlichkeit (%)")
+ax.set_xlabel("Stand nach Spieltag (Datum der bis dahin gespielten Partien)")
+ax.set_title("Verlauf der Titelchancen über die Spieltage\n"
+             f"je Stand neu simuliert (Poisson, {N_EVO:,} Läufe) — nur bis dahin bekannte Ergebnisse fix",
+             loc="left")
+ax.legend(ncol=6, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.13))
+ax.grid(axis="y", alpha=.3)
+plt.tight_layout(); plt.savefig("nb_live_title_evolution.png"); plt.show()
+evolution
+''')
+
 # ── 7. Projected bracket ────────────────────────────────────────────────────
 md(r"""## 7. Sobald die Gruppen entschieden sind: das K.-o.-Bracket füllen
 
@@ -537,8 +583,8 @@ meta = pd.Series({
     "n_sim": int(N_SIM), "match_modelle": ", ".join(MATCH_MODELS), "sim_modell": SIM_MODEL,
 })
 saved = []
-for name, df in [("standings", tables), ("next_matches", nxt),
-                 ("probabilities", prob), ("bracket", bracket)]:
+for name, df in [("standings", tables), ("next_matches", nxt), ("probabilities", prob),
+                 ("bracket", bracket), ("title_evolution", evolution)]:
     fp = RESULTS / f"{STAMP}_{name}.csv"; df.to_csv(fp, index=False); saved.append(fp.name)
 meta.to_csv(RESULTS / f"{STAMP}_run_info.csv", header=False)
 
