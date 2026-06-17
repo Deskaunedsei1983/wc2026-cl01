@@ -266,15 +266,19 @@ def _hi(row):
 ''')
 
 # ── 4. Next matches ─────────────────────────────────────────────────────────
-md(r"""## 4. Prognose der nächsten Spiele
+md(r"""## 4. Prognose der anstehenden Spiele
 
-Die nächsten noch nicht gespielten Partien mit Sieg/Remis/Niederlage-Konsens
-(Mittel aus Poisson, Negative Binomial, Elo, Colley, PageRank) und dem
-wahrscheinlichsten exakten Ergebnis (Poisson).""")
+**Alle** noch nicht gespielten Partien mit bekannten Teams (also die restlichen
+Gruppenspiele) — mit Sieg/Remis/Niederlage-Konsens (Mittel aus Poisson, Negative
+Binomial, Elo, Colley, PageRank), erwarteten Toren λ und dem wahrscheinlichsten
+exakten Ergebnis (Poisson). K.-o.-Paarungen erscheinen erst nach der
+Gruppenphase als echte Teams (bis dahin Platzhalter wie `2A`, `W74`) — ihre
+Prognose steht in Abschnitt 7.""")
 
-code(r'''def next_matches(sched, k=12):
+code(r'''def next_matches(sched, k=None):
     up = sched[~sched.played].copy()
-    up = up[up.team1.isin(STRENGTH) & up.team2.isin(STRENGTH)].sort_values("date").head(k)
+    up = up[up.team1.isin(STRENGTH) & up.team2.isin(STRENGTH)].sort_values("date")
+    if k: up = up.head(k)
     out = []
     for _, m in up.iterrows():
         a, b = m.team1, m.team2; w, d, l = wdl_consensus(a, b)
@@ -286,13 +290,16 @@ code(r'''def next_matches(sched, k=12):
                     "wahrsch. Erg.":s,"P(Erg.)":p})
     return pd.DataFrame(out)
 
-nxt = next_matches(sched, 12)
+nxt = next_matches(sched)                      # alle anstehenden Spiele mit bekannten Teams
+print(f"{len(nxt)} anstehende Partien mit bekannten Teams (die restlichen Gruppenspiele). "
+      f"K.-o.-Paarungen stehen erst nach der Gruppenphase fest — siehe Abschnitt 7.")
 (nxt.style.hide(axis="index")
    .format({"P(Sieg 1)":"{:.0f}%","P(Remis)":"{:.0f}%","P(Sieg 2)":"{:.0f}%","P(Erg.)":"{:.0f}%"})
    .background_gradient(cmap="Greens", subset=["P(Sieg 1)"])
    .background_gradient(cmap="Reds",   subset=["P(Sieg 2)"])
-   .set_caption("Nächste Spiele — W/U/N-Konsens aus 5 Modellen (Poisson, Neg.Binom, Elo, Colley, PageRank). "
-                "Ø Tore (λ) = erwartete Tore (Poisson). wahrsch. Erg. = wahrscheinlichstes exaktes Ergebnis (Modus)."))
+   .set_caption("Alle anstehenden Spiele mit bekannten Teams — W/U/N-Konsens aus 5 Modellen "
+                "(Poisson, Neg.Binom, Elo, Colley, PageRank). Ø Tore (λ) = erwartete Tore. "
+                "wahrsch. Erg. = wahrscheinlichstes exaktes Ergebnis (Modus)."))
 ''')
 
 md(r"""### 4.1 Algorithmus-Details: die fünf Modelle für das nächste Spiel
@@ -479,18 +486,20 @@ Für jeden bereits gespielten Spieltag (Datum) rechnen wir die Titelchance neu �
 mit *nur* den bis dahin bekannten Ergebnissen, der Rest simuliert (gleiches
 Poisson-Modell, 3 000 Läufe). So sieht man, wie die Resultate die Favoriten
 verschoben haben. „Start" = vor dem ersten Spiel (reine Vorhersage).""")
-code(r'''def sim_titles(pk, n=3000):
-    c = np.zeros(len(TEAMS))
+code(r'''def sim_at(pk, n=3000):
+    """Eine Simulationsrunde liefert beides: Titel- und Achtelfinal-Quote je Team."""
+    champ = np.zeros(len(TEAMS)); adv = np.zeros(len(TEAMS))
     for _ in range(n):
-        c[ix[one_sim(pk)["champ"][0]]] += 1
-    return c/n*100
+        s = one_sim(pk)
+        champ[ix[s["champ"][0]]] += 1
+        for t in s["r32"]: adv[ix[t]] += 1
+    return champ/n*100, adv/n*100
 
 N_EVO = 3000
-top_teams = prob.head(6)["Team"].tolist()
 played_dates = sorted(grp_played["date"].astype(str).unique())
-cutoffs = [("Start", None)] + [(d[5:], d) for d in played_dates]   # label ohne Jahr
+cutoffs = [("Start", None)] + [(d[5:], d) for d in played_dates]   # Label ohne Jahr
 
-rows = []
+title_mat, adv_mat, labels = [], [], []
 for label, cut in cutoffs:
     if cut is None:
         pk = {}
@@ -498,15 +507,17 @@ for label, cut in cutoffs:
         sub = grp_played[grp_played["date"].astype(str) <= cut]
         pk = {(m.group, m.team1, m.team2): (int(m.score1), int(m.score2))
               for _, m in sub.iterrows() if m.team1 in STRENGTH and m.team2 in STRENGTH}
-    odds = sim_titles(pk, N_EVO)
-    rows.append({"Stand": label, **{t: round(odds[ix[t]], 1) for t in top_teams}})
-evolution = pd.DataFrame(rows)
+    tc, ac = sim_at(pk, N_EVO)
+    title_mat.append(tc); adv_mat.append(ac); labels.append(label)
+evo_title = pd.DataFrame(title_mat, columns=TEAMS, index=labels).round(1)
+evo_adv   = pd.DataFrame(adv_mat,   columns=TEAMS, index=labels).round(1)
 
+top_teams = prob.head(6)["Team"].tolist()
 fig, ax = plt.subplots(figsize=(11, 6))
-x = range(len(evolution))
+x = range(len(labels))
 for t in top_teams:
-    ax.plot(x, evolution[t], marker="o", lw=2.2, label=t)
-ax.set_xticks(list(x)); ax.set_xticklabels(evolution["Stand"], rotation=0)
+    ax.plot(x, evo_title[t], marker="o", lw=2.2, label=t)
+ax.set_xticks(list(x)); ax.set_xticklabels(labels, rotation=0)
 ax.set_ylabel("Titelwahrscheinlichkeit (%)")
 ax.set_xlabel("Stand nach Spieltag (Datum der bis dahin gespielten Partien)")
 ax.set_title("Verlauf der Titelchancen über die Spieltage\n"
@@ -515,7 +526,35 @@ ax.set_title("Verlauf der Titelchancen über die Spieltage\n"
 ax.legend(ncol=6, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.13))
 ax.grid(axis="y", alpha=.3)
 plt.tight_layout(); plt.savefig("nb_live_title_evolution.png"); plt.show()
+evolution = evo_title[top_teams].reset_index().rename(columns={"index": "Stand"})
 evolution
+''')
+
+md(r"""### 6.4 Verlauf: Achtelfinale (Runde der 32) erreichen — die offensten Rennen
+
+Dieselbe Logik, aber für die **Qualifikation fürs Achtelfinale**. Gezeigt werden
+die sechs Teams, deren Einzug aktuell am knappsten ist (am nächsten an der
+50-%-Linie) — dort bewegt sich von Spieltag zu Spieltag am meisten.""")
+code(r'''latest = evo_adv.iloc[-1]
+mid = latest[(latest > 5) & (latest < 95)]
+contested = (mid.sub(50).abs().sort_values().index[:6].tolist() if len(mid) >= 6
+             else latest.sub(50).abs().sort_values().index[:6].tolist())
+
+fig, ax = plt.subplots(figsize=(11, 6))
+x = range(len(evo_adv))
+for t in contested:
+    ax.plot(x, evo_adv[t], marker="o", lw=2.2, label=t)
+ax.axhline(50, color=GREY, ls="--", lw=1)
+ax.set_xticks(list(x)); ax.set_xticklabels(evo_adv.index, rotation=0)
+ax.set_ylabel("P(Achtelfinale erreichen) (%)")
+ax.set_xlabel("Stand nach Spieltag")
+ax.set_title("Verlauf: Achtelfinale (Runde der 32) erreichen — die offensten Rennen\n"
+             f"je Stand neu simuliert (Poisson, {N_EVO:,} Läufe)", loc="left")
+ax.legend(ncol=6, frameon=False, loc="upper center", bbox_to_anchor=(0.5, -0.13))
+ax.grid(axis="y", alpha=.3)
+plt.tight_layout(); plt.savefig("nb_live_advance_evolution.png"); plt.show()
+advance_evolution = evo_adv[contested].reset_index().rename(columns={"index": "Stand"})
+advance_evolution
 ''')
 
 # ── 7. Projected bracket ────────────────────────────────────────────────────
@@ -584,7 +623,8 @@ meta = pd.Series({
 })
 saved = []
 for name, df in [("standings", tables), ("next_matches", nxt), ("probabilities", prob),
-                 ("bracket", bracket), ("title_evolution", evolution)]:
+                 ("bracket", bracket), ("title_evolution", evolution),
+                 ("advance_evolution", advance_evolution)]:
     fp = RESULTS / f"{STAMP}_{name}.csv"; df.to_csv(fp, index=False); saved.append(fp.name)
 meta.to_csv(RESULTS / f"{STAMP}_run_info.csv", header=False)
 
