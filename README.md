@@ -60,6 +60,14 @@ jupyter nbconvert --to notebook --execute --inplace wc2026_match_and_scoreline_a
 # or just open it in Jupyter and Run All. Regenerate the notebook with: python build_nb.py
 ```
 
+**During the tournament**, [`wc2026_live_update.ipynb`](wc2026_live_update.ipynb) pulls the **actual 2026 results** (live from openfootball, public domain), shows current group standings, predicts the upcoming matches, resolves the **official knockout bracket** (Round of 32 → final) once the groups are decided, and re-computes every team's advance/title probability with a hybrid Monte Carlo (played results fixed, the rest simulated):
+
+```bash
+python refresh_data.py           # download the latest 2026 results -> data/wc2026_results.csv
+jupyter nbconvert --to notebook --execute --inplace wc2026_live_update.ipynb
+# Re-run both after each matchday. Regenerate the notebook with: python build_live_nb.py
+```
+
 ## Repository layout
 
 ```
@@ -68,7 +76,9 @@ wc2026_model_suite.py       # the eleven-model suite
 make_charts.py / add_article_charts.py / build_article2_extras.py  # figures
 world_cup_2026_prediction.ipynb  # annotated notebook (single model)
 wc2026_match_and_scoreline_analysis.ipynb  # win/draw/loss + goal-to-goal scoreline analysis + title sim
-build_nb.py                 # rebuilds the match/scoreline notebook
+wc2026_live_update.ipynb    # in-tournament: live results, standings, knockout bracket, updated odds
+build_nb.py / build_live_nb.py   # rebuild the two analysis notebooks
+refresh_data.py             # download latest results from openfootball -> data/*.csv
 data/                       # match data (public domain) + SOURCES.md
 model_title_probabilities.csv, model_picks.csv, classifier_cv_metrics.csv  # results
 *.png                       # generated figures
