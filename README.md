@@ -76,6 +76,14 @@ jupyter nbconvert --to notebook --execute --inplace wc2026_advanced_gpu_benchmar
 # CPU is fine (< 1 GB RAM, < 2 min). Regenerate with: python build_benchmark_nb.py
 ```
 
+To **score the forecasts against reality**, [`wc2026_prediction_eval.ipynb`](wc2026_prediction_eval.ipynb) lines up the live notebook's per-match predictions chronologically against the real played results and reports the quality: win/draw/loss tendency hit-rate (✓/✗), exact-scoreline hit-rate, expected-goals (λ) error, plus Brier/log-loss and calibration charts:
+
+```bash
+jupyter nbconvert --to notebook --execute --inplace wc2026_prediction_eval.ipynb
+# Uses results/*_next_matches.csv if present, else reproduces with the same model.
+# Regenerate with: python build_eval_nb.py
+```
+
 ## Repository layout
 
 ```
@@ -86,7 +94,8 @@ world_cup_2026_prediction.ipynb  # annotated notebook (single model)
 wc2026_match_and_scoreline_analysis.ipynb  # win/draw/loss + goal-to-goal scoreline analysis + title sim
 wc2026_live_update.ipynb    # in-tournament: live results, standings, knockout bracket, updated odds
 wc2026_advanced_gpu_benchmark_suite.ipynb  # ~16-model ML/DL benchmark + Optuna tuning + Monte-Carlo
-build_nb.py / build_live_nb.py / build_benchmark_nb.py   # rebuild the analysis notebooks
+wc2026_prediction_eval.ipynb  # backtest: live forecasts vs real results (WDL/scoreline/lambda quality)
+build_nb.py / build_live_nb.py / build_benchmark_nb.py / build_eval_nb.py   # rebuild the analysis notebooks
 refresh_data.py             # download latest results from openfootball -> data/*.csv
 data/                       # match data (public domain) + SOURCES.md
 model_title_probabilities.csv, model_picks.csv, classifier_cv_metrics.csv  # results
