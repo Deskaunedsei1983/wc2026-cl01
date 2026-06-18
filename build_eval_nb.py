@@ -375,7 +375,81 @@ if Path(hp).exists():
         print("Läufe erscheint, sobald das Live-Notebook an mehreren Spieltagen lief")
         print("(jeweils: python refresh_data.py  ->  wc2026_live_update.ipynb Run All).")""")
 
-md(r"""## 7. Ergebnis speichern & Fazit""")
+md(r"""## 7. Kontrolle aller gespeicherten Prognosen — pro Lauf & pro Spieltag
+
+Damit du **nichts händisch** durchgehen musst: eine automatische Kontrolle.
+Zuerst eine **Übersicht je gespeichertem Lauf** (`results/*_next_matches.csv`) —
+wie viele Prognosen er enthält, wie viele davon inzwischen gespielt sind und wie
+gut sie lagen. Danach eine **Spieltag-für-Spieltag-Bilanz** über alle gespielten
+Spiele. Die vollständige Spiel-für-Spiel-Tabelle steht in **§3b**.""")
+
+code(r"""# --- Übersicht je gespeichertem Lauf (scannt alle results/*_next_matches.csv) ---
+def eval_snapshot(path):
+    df = pd.read_csv(path); rows = []
+    for _, r in df.iterrows():
+        b = str(r.get("Begegnung", ""))
+        if " – " not in b: continue
+        h, a = [x.strip() for x in b.split(" – ")]
+        if (h, a) not in played_pairs: continue
+        m = played[(played.home==h) & (played.away==a)].iloc[0]
+        gh, ga = int(m.score1), int(m.score2)
+        lh, la = [float(x) for x in str(r["Ø Tore (λ)"]).split(" : ")]
+        pr = np.array([float(r["P(Sieg 1)"]), float(r["P(Remis)"]), float(r["P(Sieg 2)"])])
+        tp = [1,0,-1][int(np.argmax(pr))]; ta = int(np.sign(gh-ga))
+        rows.append(dict(wdl_ok=tp==ta, score_ok=str(r["wahrsch. Erg."])==f"{gh}:{ga}",
+                         lam_err=abs(lh-gh)+abs(la-ga)))
+    return pd.DataFrame(rows)
+
+if not snap:
+    print("Keine gespeicherten Snapshots in results/ — zuerst wc2026_live_update.ipynb ausführen.")
+else:
+    ov = []
+    for f in snap:
+        ts = Path(f).name.split("_next")[0]; df = pd.read_csv(f)
+        npred = sum(1 for b in df.get("Begegnung", []) if " – " in str(b))
+        e = eval_snapshot(f)
+        ov.append(dict(Lauf=ts, Prognosen=npred, gespielt=len(e),
+                       **({"Tendenz": f"{e.wdl_ok.mean()*100:.0f}%",
+                           "Exakt": f"{e.score_ok.mean()*100:.0f}%",
+                           "λ-MAE": f"{e.lam_err.mean():.2f}"} if len(e) else
+                          {"Tendenz":"—","Exakt":"—","λ-MAE":"—"})))
+    ov_df = pd.DataFrame(ov)
+    display(ov_df.style.hide(axis="index")
+            .set_caption("Pro gespeichertem Lauf: Prognosen, davon gespielt, und Trefferquoten"))
+    if (ov_df["gespielt"] == 0).all():
+        print("Hinweis: Die aktuell gespeicherten Snapshots betreffen noch ungespielte Spiele.")
+        print("Die Spieltag-Bilanz unten nutzt daher die (statisch identischen) Prognosen")
+        print("für alle bereits gespielten Spiele — sobald du das Live-Notebook vor weiteren")
+        print("Spieltagen ausführst, füllen sich hier die Trefferquoten je Lauf.")""")
+
+code(r"""# --- Spieltag-für-Spieltag-Bilanz über ALLE gespielten Spiele ---
+mtab = (ev.groupby("Datum")
+          .agg(Spiele=("wdl_ok","size"), Tendenz_ok=("wdl_ok","sum"),
+               Exakt_ok=("score_ok","sum"), lam_MAE=("lam_err","mean"))
+          .reset_index())
+mtab["Tendenz %"] = (mtab.Tendenz_ok/mtab.Spiele*100).round(0).astype(int)
+mtab["Exakt %"]   = (mtab.Exakt_ok/mtab.Spiele*100).round(0).astype(int)
+mtab["λ-MAE"]     = mtab.lam_MAE.round(2)
+show = mtab[["Datum","Spiele","Tendenz_ok","Exakt_ok","Tendenz %","Exakt %","λ-MAE"]].rename(
+        columns={"Tendenz_ok":"Tendenz ✓","Exakt_ok":"Ergebnis ✓"})
+display(show.style.hide(axis="index")
+        .background_gradient(cmap="RdYlGn", subset=["Tendenz %","Exakt %"])
+        .background_gradient(cmap="RdYlGn_r", subset=["λ-MAE"])
+        .format({"λ-MAE":"{:.2f}"})
+        .set_caption("Spieltag-für-Spieltag: wie viele Spiele das Modell je Tag richtig lag (historisch)"))
+
+fig, ax = plt.subplots(figsize=(11, 4.5))
+x = range(len(mtab))
+ax.bar(x, mtab.Tendenz_ok, color=GREEN, label="Tendenz getroffen")
+ax.bar(x, mtab.Spiele - mtab.Tendenz_ok, bottom=mtab.Tendenz_ok, color=RED, label="daneben")
+for i, (s, t) in enumerate(zip(mtab.Spiele, mtab.Tendenz_ok)):
+    ax.text(i, s+0.05, f"{t}/{s}", ha="center", fontsize=9)
+ax.set_xticks(list(x)); ax.set_xticklabels(mtab.Datum, rotation=30, ha="right")
+ax.set_ylabel("Spiele"); ax.set_title("Tendenz-Treffer je Spieltag (historische Kontrolle aller Spiele)")
+ax.legend(); ax.grid(axis="y", alpha=.3)
+plt.tight_layout(); plt.savefig("nb_eval_per_matchday.png"); plt.show()""")
+
+md(r"""## 8. Ergebnis speichern & Fazit""")
 code(r"""ev_out = ev[["Datum","Begegnung","src","lam_str","endstand","lam_err","tipp",
              "wdl_ok","modal","score_ok"]].copy()
 ev_out.to_csv("prediction_eval_log.csv", index=False)
