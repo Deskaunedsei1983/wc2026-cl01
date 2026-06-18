@@ -308,7 +308,74 @@ fig.suptitle("WM 2026 — Qualität der Live-Prognosen gegen die echten Ergebnis
              fontweight="bold", y=1.01)
 plt.tight_layout(); plt.savefig("nb_eval_quality.png"); plt.show()""")
 
-md(r"""## 6. Ergebnis speichern & Fazit""")
+md(r"""## 6. Historischer Verlauf aus den gespeicherten `results/`-Daten
+
+Hier laden wir die vom Live-Notebook gespeicherten Dateien und zeigen den
+**zeitlichen Verlauf** — zwei verschiedene Dinge:
+
+* **Match-Prognosen** (`*_next_matches.csv`, λ + W/U/N je Spiel) sind **statisch**:
+  Sie hängen nur an der Vor-Turnier-Kalibrierung, *nicht* an Ergebnissen. „Alte vs.
+  neue" Prognose für dasselbe Spiel ist daher identisch — oben mit der Realität
+  verglichen. Darum stammen die Werte je Spiel aus jedem Snapshot gleich.
+* **Titel-/Achtelfinal-Chancen** (`*_title_evolution.csv`, `*_advance_evolution.csv`)
+  **verschieben sich** mit jedem Ergebnis — *das* ist die eigentliche „Prognose-
+  Verschiebung über die Zeit", die wir hier sichtbar machen.""")
+
+code(r"""played_pairs = set(zip(played.home, played.away))
+snap = sorted(glob.glob("results/*_next_matches.csv"))
+print(f"Gespeicherte Prognose-Schnappschüsse (next_matches): {len(snap)}")
+for f in snap[-4:]:
+    df = pd.read_csv(f); ts = Path(f).name.split("_next")[0]
+    pairs = [tuple(x.strip() for x in str(b).split(" – ")) for b in df.get("Begegnung", []) if " – " in str(b)]
+    done = sum(1 for p in pairs if p in played_pairs)
+    print(f"   {ts}: {len(pairs)} Prognosen gespeichert, davon {done} inzwischen gespielt")
+
+# Titelchancen-Verlauf (geladen aus results/) — zeigt die Verschiebung je Spieltag
+te = sorted(glob.glob("results/*_title_evolution.csv"))
+if te:
+    tev = pd.read_csv(te[-1]); cols = [c for c in tev.columns if c != "Stand"]
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for c in cols: ax.plot(tev["Stand"], tev[c], "-o", lw=2, ms=4, label=c)
+    ax.set_title(f"Titelchancen-Verlauf über die Spieltage  (geladen: {Path(te[-1]).name})")
+    ax.set_ylabel("Titelwahrscheinlichkeit (%)"); ax.set_xlabel("Stand nach Spieltag")
+    ax.legend(ncol=3, fontsize=9); ax.grid(alpha=.3)
+    plt.tight_layout(); plt.savefig("nb_eval_title_history.png"); plt.show()
+    print("Interpretation: jede Linie zeigt, wie sich die Titelchance eines Teams mit den")
+    print("real gespielten Ergebnissen verschoben hat (Start = reine Vor-Turnier-Prognose).")
+else:
+    print("\nKein *_title_evolution.csv in results/ — bitte zuerst wc2026_live_update.ipynb")
+    print("ausführen (Run All); dann erscheinen hier die gespeicherten Verläufe.")""")
+
+code(r"""# Achtelfinal-Einzug-Verlauf + (falls mehrere Läufe) Verlauf ÜBER die Läufe
+ae = sorted(glob.glob("results/*_advance_evolution.csv"))
+if ae:
+    aev = pd.read_csv(ae[-1]); cols = [c for c in aev.columns if c != "Stand"]
+    fig, ax = plt.subplots(figsize=(11, 5))
+    for c in cols: ax.plot(aev["Stand"], aev[c], "-o", lw=2, ms=4, label=c)
+    ax.axhline(50, color=GREY, ls="--", lw=1)
+    ax.set_title(f"Achtelfinal-Einzug-Verlauf  (geladen: {Path(ae[-1]).name})")
+    ax.set_ylabel("P(Achtelfinale erreichen) (%)"); ax.set_xlabel("Stand nach Spieltag")
+    ax.legend(ncol=3, fontsize=9); ax.grid(alpha=.3)
+    plt.tight_layout(); plt.savefig("nb_eval_advance_history.png"); plt.show()
+
+hp = "results/title_history.csv"
+if Path(hp).exists():
+    th = pd.read_csv(hp); runs = th["run"].nunique()
+    if runs > 1:
+        piv = th.pivot_table(index="run", columns="Team", values="Titel")
+        top = piv.iloc[-1].sort_values(ascending=False).head(6).index
+        fig, ax = plt.subplots(figsize=(11, 5))
+        for t in top: ax.plot(piv.index, piv[t], "-o", lw=2, label=t)
+        ax.set_title(f"Titelchancen über {runs} gespeicherte Live-Läufe (title_history.csv)")
+        ax.set_ylabel("Titelwahrscheinlichkeit (%)"); ax.set_xlabel("Lauf (Zeitstempel)")
+        ax.legend(ncol=3, fontsize=9); ax.grid(alpha=.3); plt.xticks(rotation=30, ha="right")
+        plt.tight_layout(); plt.savefig("nb_eval_run_history.png"); plt.show()
+    else:
+        print(f"title_history.csv: bisher {runs} Lauf gespeichert. Der Verlauf ÜBER mehrere")
+        print("Läufe erscheint, sobald das Live-Notebook an mehreren Spieltagen lief")
+        print("(jeweils: python refresh_data.py  ->  wc2026_live_update.ipynb Run All).")""")
+
+md(r"""## 7. Ergebnis speichern & Fazit""")
 code(r"""ev_out = ev[["Datum","Begegnung","src","lam_str","endstand","lam_err","tipp",
              "wdl_ok","modal","score_ok"]].copy()
 ev_out.to_csv("prediction_eval_log.csv", index=False)
