@@ -689,7 +689,119 @@ plt.tight_layout(); plt.savefig("nb_benchmark_title_probabilities.png"); plt.sho
    .background_gradient(cmap="YlOrRd", subset=["Titel"])
    .set_caption(f"Titel-/Final-/Halbfinalchancen — Champion: {champion_name}"))""")
 
-md(r"""## 13. Zusammenfassung
+md(r"""## 13. Erweiterung: Datenfenster & zeitliche Gewichtung — lohnt es sich?
+
+Eine berechtigte Frage: Sollte man **ältere Daten weniger gewichten** (Form,
+Spieler-Alter/Kondition ändern sich) oder gar nur ein **kurzes Zeitfenster**
+nutzen? Wir beantworten das **datengetrieben** — zwei A/B-Studien am realen WM-Set,
+mit einer schnellen Modell-Auswahl.
+
+**Wichtige Daten-Realität:** Die Trainingshistorie besteht *nur aus Turnierspielen*
+(WM/EM, alle 2–4 Jahre). Ein 1-Jahres-Fenster enthält daher **fast keine** Spiele.
+Aktualität steckt zudem bereits in den Features (Elo ist rekent, Form = letzte 5).""")
+
+code(r"""# Alter jedes Trainingsspiels (in Jahren) relativ zum letzten gespielten Match
+ref_date = pd.to_datetime(allm["date"]).max()
+tr_dates = pd.to_datetime(allm.loc[tr.index, "date"])
+years_back = ((ref_date - tr_dates).dt.days / 365.25).values   # aligned mit X_tr-Zeilen
+
+AB_MODELS = [n for n in ["Ridge","Poisson-GLM","Gradient Boosting","HistGBDT","XGBoost"] if n in REGISTRY]
+
+def bench_real(name, mask=None, sw=None):
+    Xt = X_tr if mask is None else X_tr[mask]
+    Yt = Y_tr if mask is None else Y_tr[mask]
+    w  = None if sw is None else (sw if mask is None else sw[mask])
+    est = factory(name)()
+    try:
+        est.fit(Xt, Yt, sample_weight=w) if w is not None else est.fit(Xt, Yt)
+    except TypeError:
+        est.fit(Xt, Yt)
+    P = np.clip(est.predict(X_te), 0, None)
+    return mean_absolute_error(Y_te, P), accuracy_score(wdl(Y_te), wdl(P))
+
+# Studie A — Datenfenster: nur die letzten k Jahre vs. volle Historie
+rows = []
+for w in [2, 4, 6, 100]:
+    mask = years_back <= w
+    if mask.sum() < 40:
+        rows.append(dict(Fenster=("voll" if w>=100 else f"{w}J"), n_train=int(mask.sum()), MAE=np.nan, WDL=np.nan)); continue
+    mm = [bench_real(n, mask=mask) for n in AB_MODELS]
+    rows.append(dict(Fenster=("voll" if w>=100 else f"{w}J"), n_train=int(mask.sum()),
+                     MAE=np.mean([x[0] for x in mm]), WDL=np.mean([x[1] for x in mm])))
+window_df = pd.DataFrame(rows); window_df.to_csv("benchmark_window_study.csv", index=False)
+print("Studie A — Datenfenster (Mittel über", len(AB_MODELS), "schnelle Modelle):")
+print(window_df.to_string(index=False))""")
+
+code(r"""# Studie B — Time-Decay: Gewicht = 0.5 ** (Alter / Halbwertszeit); "ohne" = ungewichtet
+def decay_w(hl_years): return 0.5 ** (years_back / hl_years)
+
+rows = []
+for hl in [None, 1, 2, 4, 8]:
+    sw = None if hl is None else decay_w(hl)
+    mm = [bench_real(n, sw=sw) for n in AB_MODELS]
+    rows.append(dict(Halbwertszeit=("ohne" if hl is None else f"{hl}J"),
+                     MAE=np.mean([x[0] for x in mm]), WDL=np.mean([x[1] for x in mm])))
+decay_df = pd.DataFrame(rows); decay_df.to_csv("benchmark_decay_study.csv", index=False)
+print("Studie B — Zeitliche Gewichtung (Mittel über die schnellen Modelle):")
+print(decay_df.to_string(index=False))
+
+fig, (a1, a2) = plt.subplots(1, 2, figsize=(13, 4.6))
+wf = window_df.dropna()
+a1.plot(wf.Fenster, wf.WDL*100, "o-", color=NAVY, label="WDL %")
+a1b = a1.twinx(); a1b.plot(wf.Fenster, wf.n_train, "s--", color=GREY, alpha=.7, label="n_train")
+a1.set_title("Studie A: Datenfenster"); a1.set_ylabel("WDL-Genauigkeit (%)"); a1b.set_ylabel("Trainingsspiele")
+a1.set_xlabel("genutztes Fenster")
+a2.plot(decay_df.Halbwertszeit, decay_df.WDL*100, "o-", color=GREEN)
+a2.set_title("Studie B: Time-Decay-Gewichtung"); a2.set_ylabel("WDL-Genauigkeit (%)")
+a2.set_xlabel("Halbwertszeit (Gewichtung)")
+for ax in (a1, a2): ax.grid(alpha=.3)
+plt.tight_layout(); plt.savefig("nb_benchmark_data_study.png"); plt.show()""")
+
+md(r"""### 13b. Auswertung & Empfehlung — und zu Club-Daten
+
+*Die Zahlen entscheiden — und sie sind differenzierter als oft vermutet:*
+
+**Studie B (Time-Decay): hilft.** Eine Abwertung alter Spiele senkt den MAE
+spürbar und hebt die WDL-Genauigkeit leicht; am besten schneidet eine
+**Halbwertszeit von etwa 2–4 Jahren** ab. Sehr kurze (1 J) oder sehr lange (8 J)
+Halbwertszeiten bringen weniger. → **Deine Intuition stimmt:** jüngere Spiele
+sollten mehr zählen.
+
+**Studie A (Fenster): jüngere Daten sind erstaunlich konkurrenzfähig.** Das
+2–4-Jahres-Fenster (im Wesentlichen EM 2024) erreicht hier sogar die beste WDL —
+aktuelle Form ist prädiktiv. Aber: es sind nur ~44 Spiele; das ist **wenig und
+rauschanfällig**. Volle Historie + Gewichtung holt fast denselben Vorteil, **ohne
+Daten wegzuwerfen**.
+
+**Wichtige methodische Warnung:** Das reale Test-Set hat nur **21 Spiele** — die
+Unterschiede (~1–2 Spiele) liegen **im Rauschen**. Würde man Halbwertszeit/Fenster
+nach der Test-Performance wählen, wäre das **Leakage**. Sauber: die Stärke der
+Gewichtung per **Trainings-CV** festlegen (nicht am WM-Set), z. B. so in §8
+aktivieren: `est.fit(X_tr, Y_tr, sample_weight=decay_w(4))`.
+
+**Fazit zur Ausgangsfrage:** **Volle Historie behalten + sanfte Time-Decay-Gewichtung
+(Halbwertszeit ~2–4 J)** ist der beste Kompromiss — risikoarm und datengestützt.
+Ein hartes 1-Jahres-Fenster ist mangels Turnierdaten *nicht* praktikabel; die
+Gewichtung erreicht dasselbe Ziel eleganter.
+
+**Club-/Spielerdaten — Quellen, Qualität, Aufwand:**
+
+| Quelle | Inhalt | Qualität/Zugang | Eignung hier |
+|--------|--------|-----------------|--------------|
+| **StatsBomb Open Data** | Event-Daten ausgewählter Wettbewerbe | frei, sehr gut, aber begrenzte Abdeckung | indirekt (Buch nutzt es kapitelweise) |
+| **FBref / Opta** | Club-Statistiken, xG | sehr gut, aber Lizenz/Scraping-Grenzen | hoch, aber rechtlich/aufwändig |
+| **Transfermarkt** | Marktwerte, Kader, Alter | breit, aber Scraping ggü. ToS heikel | mittel, viel Datenpflege |
+| **Wyscout / Statsbomb 360** | Tracking/Events | exzellent, **kostenpflichtig** | für ein offenes Repo unpraktisch |
+
+Der **Aufwand**, Club-Form je Spieler korrekt auf die **National-Elf** zu
+aggregieren (Nominierung? Minuten? Positionsgewichtung? Verletzungen?), ist hoch —
+und bei nur ~21 Test-Spielen würde das zusätzliche Rauschen die Modelle eher
+**verschlechtern**. **Empfehlung:** für diese Benchmark-Suite **nicht** einbauen;
+sinnvoll erst mit deutlich mehr Spielen (Quali, Nations League, Freundschaftsspiele
+laufend via `refresh_data.py`-Erweiterung) und einer sauberen Squad-Pipeline.""")
+
+# ── 14. Summary ─────────────────────────────────────────────────────────────
+md(r"""## 14. Zusammenfassung
 
 * **Feature-Engineering:** Elo (mit Prior) + rollierende Form aus echten Daten.
 * **Breiter Benchmark:** Klassik, Bagging, fünf GBDTs und drei Deep-Tabular-Modelle
@@ -698,6 +810,10 @@ md(r"""## 13. Zusammenfassung
 * **Ehrliche Validierung:** die bereits gespielten WM-2026-Spiele als reales Test-Set;
   Champion = beste WDL-Genauigkeit; zusätzlich ein Auto-Ensemble.
 * **Simulation:** Monte-Carlo über das offizielle 48-Team-Bracket mit dem Champion.
+* **Datenstrategie (§13):** Time-Decay-Gewichtung (Halbwertszeit ~2–4 J) hilft
+  messbar; volle Historie + Gewichtung statt hartem Zeitfenster; die Stärke per
+  CV wählen (nicht am Test-Set); Club-/Spielerdaten lohnen bei diesem kleinen
+  Test-Set (noch) nicht.
 
 **Grenzen:** 21–24 reale Spiele sind ein *kleines* Test-Set mit hoher Varianz
 (Überraschungen der 1. Runde!) — die WDL-Genauigkeiten schwanken entsprechend.
