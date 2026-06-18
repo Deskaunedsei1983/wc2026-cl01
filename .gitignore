@@ -9,3 +9,5 @@ venv/
 results/
 # refreshed training files written by `refresh_data.py --training` (review before replacing)
 data/*_refreshed.csv
+# CatBoost training logs from the benchmark notebook
+catboost_info/

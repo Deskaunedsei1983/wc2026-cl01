@@ -68,6 +68,14 @@ jupyter nbconvert --to notebook --execute --inplace wc2026_live_update.ipynb
 # Re-run both after each matchday. Regenerate the notebook with: python build_live_nb.py
 ```
 
+For a full **ML/DL benchmark suite** — ~16 models (classics, five GBDTs, PyTorch DNN / FT-Transformer / TabNet) **auto-tuned with Optuna** (TPE + Hyperband) under RAM/VRAM guardrails, **validated against the already-played WM 2026 results** (auto-selected champion by WDL accuracy), then a Monte-Carlo of the 48-team tournament — see [`wc2026_advanced_gpu_benchmark_suite.ipynb`](wc2026_advanced_gpu_benchmark_suite.ipynb):
+
+```bash
+pip install optuna lightgbm catboost torch pytorch-tabnet psutil   # advanced-suite extras
+jupyter nbconvert --to notebook --execute --inplace wc2026_advanced_gpu_benchmark_suite.ipynb
+# CPU is fine (< 1 GB RAM, < 2 min). Regenerate with: python build_benchmark_nb.py
+```
+
 ## Repository layout
 
 ```
@@ -77,7 +85,8 @@ make_charts.py / add_article_charts.py / build_article2_extras.py  # figures
 world_cup_2026_prediction.ipynb  # annotated notebook (single model)
 wc2026_match_and_scoreline_analysis.ipynb  # win/draw/loss + goal-to-goal scoreline analysis + title sim
 wc2026_live_update.ipynb    # in-tournament: live results, standings, knockout bracket, updated odds
-build_nb.py / build_live_nb.py   # rebuild the two analysis notebooks
+wc2026_advanced_gpu_benchmark_suite.ipynb  # ~16-model ML/DL benchmark + Optuna tuning + Monte-Carlo
+build_nb.py / build_live_nb.py / build_benchmark_nb.py   # rebuild the analysis notebooks
 refresh_data.py             # download latest results from openfootball -> data/*.csv
 data/                       # match data (public domain) + SOURCES.md
 model_title_probabilities.csv, model_picks.csv, classifier_cv_metrics.csv  # results

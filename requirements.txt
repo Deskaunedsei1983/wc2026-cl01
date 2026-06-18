@@ -5,5 +5,13 @@ matplotlib>=3.7
 statsmodels>=0.14
 scikit-learn>=1.3
 xgboost>=2.0
-# optional, only to execute the notebook:
+# optional, only to execute the notebooks:
 # jupyter>=1.0
+
+# optional, for wc2026_advanced_gpu_benchmark_suite.ipynb (auto-tuning + deep tabular):
+# optuna>=3.5          # Bayesian hyperparameter tuning (TPE + Hyperband)
+# lightgbm>=4.0
+# catboost>=1.2
+# torch>=2.0           # CPU build is enough; GPU optional (VRAM < 500 MB)
+# pytorch-tabnet>=4.1  # attentive tabular DL
+# psutil>=5.9          # RAM/VRAM resource monitor
