@@ -108,8 +108,8 @@ def scoreline(a, b, R=STRENGTH, disp=0.0, maxg=7):
     P = np.outer(pmf(la), pmf(lb)); P /= P.sum(); return P
 def wdl(a, b, R=STRENGTH):
     P = scoreline(a, b, R); return np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum()
-def modal_score(a, b):
-    P = scoreline(a, b); n = P.shape[0]; i, j = divmod(int(np.argmax(P)), n); return f"{i}:{j}"
+def modal_score(a, b, R=STRENGTH):
+    P = scoreline(a, b, R); n = P.shape[0]; i, j = divmod(int(np.argmax(P)), n); return f"{i}:{j}"
 
 def _ratings(kind):
     teams = sorted(set(M.home_team)|set(M.away_team)); idx={t:i for i,t in enumerate(teams)}; n=len(teams)
@@ -133,11 +133,11 @@ def _ratings(kind):
     return {t:(1850+(raw[t]-mu)/sd*130) if t in raw else STRENGTH[t] for t in TEAMS}
 COLLEY, PAGER = _ratings("colley"), _ratings("pagerank")
 
-def wdl_consensus(a, b):
-    # Mittel aus 5 Modellen (wie im Live-Notebook)
-    mods = [wdl(a,b,STRENGTH)]
-    P = scoreline(a,b,STRENGTH,alpha); mods.append((np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum()))
-    da = STRENGTH[a]-STRENGTH[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
+def wdl_consensus(a, b, R=STRENGTH):
+    # Mittel aus 5 Modellen (wie im Live-Notebook); R = Stärke-Basis (statisch oder laufend)
+    mods = [wdl(a,b,R)]
+    P = scoreline(a,b,R,alpha); mods.append((np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum()))
+    da = R[a]-R[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
     mods.append(((1-pdr)*we, pdr, (1-pdr)*(1-we)))
     mods.append(wdl(a,b,COLLEY)); mods.append(wdl(a,b,PAGER))
     arr = np.array(mods).mean(0); return tuple(arr/arr.sum())
@@ -308,7 +308,62 @@ fig.suptitle("WM 2026 — Qualität der Live-Prognosen gegen die echten Ergebnis
              fontweight="bold", y=1.01)
 plt.tight_layout(); plt.savefig("nb_eval_quality.png"); plt.show()""")
 
-md(r"""## 6. Historischer Verlauf aus den gespeicherten `results/`-Daten
+md(r"""## 6. A/B-Vergleich: statische Vorab-Stärke vs. laufendes WM-Elo
+
+Zwei Stärke-Grundlagen auf **denselben echten Spielen**:
+
+* **statisch** — der Vor-Turnier-`STRENGTH`-Snapshot (wie bisher),
+* **laufend** — ein **Elo, das aus den gespielten WM-Ergebnissen mitläuft**
+  (Startwert = `STRENGTH`, K=30), **leakage-frei** je Spiel: es nutzt nur
+  Ergebnisse von *vor* diesem Spiel (Walk-Forward).""")
+
+code(r"""def running_elo(prior, before_date=None, K=30.0):
+    e = dict(prior)
+    sub = played if before_date is None else played[played.date < before_date]
+    for _, m in sub.sort_values("date").iterrows():
+        h, a = m.home, m.away; gh, ga = int(m.score1), int(m.score2)
+        eh, ea = e[h], e[a]; exp = 1/(1+10**((ea-eh)/400))
+        s = 1.0 if gh>ga else (0.5 if gh==ga else 0.0)
+        e[h] += K*(s-exp); e[a] += K*((1-s)-(1-exp))
+    return e
+
+def eval_arm(use_running):
+    rows = []
+    for _, m in played.iterrows():
+        h, a, gh, ga = m.home, m.away, int(m.score1), int(m.score2)
+        R = running_elo(STRENGTH, m.date) if use_running else STRENGTH
+        lh, la = lam(h, a, R); w, d, l = wdl_consensus(h, a, R)
+        tp = [1,0,-1][int(np.argmax([w,d,l]))]; ta = int(np.sign(gh-ga))
+        rows.append(dict(wdl_ok=tp==ta, score_ok=modal_score(h,a,R)==f"{gh}:{ga}",
+                         lam_err=abs(lh-gh)+abs(la-ga), pw=w, pd_=d, pl=l, y={1:0,0:1,-1:2}[ta]))
+    e = pd.DataFrame(rows); n = len(e)
+    P = e[["pw","pd_","pl"]].values; oh = np.zeros((n,3)); oh[np.arange(n), e.y] = 1
+    return {"Tendenz (WDL) %": e.wdl_ok.mean()*100, "Exakt-Ergebnis %": e.score_ok.mean()*100,
+            "λ-MAE": e.lam_err.mean(),
+            "Brier": float(np.mean(np.sum((P-oh)**2,1))),
+            "Log-Loss": float(-np.mean(np.log(np.clip(P[np.arange(n),e.y],1e-6,1))))}
+
+ab = pd.DataFrame({"statisch (Vorab)": eval_arm(False), "laufend (WM-Elo)": eval_arm(True)})
+ab["Δ (laufend−statisch)"] = ab["laufend (WM-Elo)"] - ab["statisch (Vorab)"]
+display(ab.style.format("{:.2f}")
+        .set_caption("A/B am realen WM-Set (Walk-Forward): statische Vorab-Stärke vs. laufendes WM-Elo"))
+if abs(ab.loc["Tendenz (WDL) %","Δ (laufend−statisch)"]) < 0.5 and abs(ab.loc["λ-MAE","Δ (laufend−statisch)"]) < 0.02:
+    print("Hinweis: In der frühen Phase (1. Runde) fast identisch — vor dem jeweiligen Spiel")
+    print("existieren kaum Vorspiele, daher laufendes Elo ~= statisch. Der Unterschied wächst")
+    print("mit jedem Spieltag (mehr Vorspiele je Team).")""")
+
+code(r"""# Wie stark hat das laufende Elo die Teams aus ALLEN bisherigen Ergebnissen bewegt?
+R_now = running_elo(STRENGTH)
+mov = pd.DataFrame({"Team": TEAMS, "Vorab": [STRENGTH[t] for t in TEAMS],
+                    "Laufend": [round(R_now[t]) for t in TEAMS]})
+mov["Δ Elo"] = mov.Laufend - mov.Vorab
+mov = mov.reindex(mov["Δ Elo"].abs().sort_values(ascending=False).index).head(14)
+display(mov.style.hide(axis="index")
+        .format({"Vorab":"{:.0f}","Laufend":"{:.0f}","Δ Elo":"{:+.0f}"})
+        .background_gradient(cmap="RdYlGn", subset=["Δ Elo"])
+        .set_caption("Größte Elo-Bewegungen aus den gespielten WM-Ergebnissen (laufend vs. statisch)"))""")
+
+md(r"""## 7. Historischer Verlauf aus den gespeicherten `results/`-Daten
 
 Hier laden wir die vom Live-Notebook gespeicherten Dateien und zeigen den
 **zeitlichen Verlauf** — zwei verschiedene Dinge:
@@ -375,7 +430,7 @@ if Path(hp).exists():
         print("Läufe erscheint, sobald das Live-Notebook an mehreren Spieltagen lief")
         print("(jeweils: python refresh_data.py  ->  wc2026_live_update.ipynb Run All).")""")
 
-md(r"""## 7. Kontrolle aller gespeicherten Prognosen — pro Lauf & pro Spieltag
+md(r"""## 8. Kontrolle aller gespeicherten Prognosen — pro Lauf & pro Spieltag
 
 Damit du **nichts händisch** durchgehen musst: eine automatische Kontrolle.
 Zuerst eine **Übersicht je gespeichertem Lauf** (`results/*_next_matches.csv`) —
@@ -449,7 +504,7 @@ ax.set_ylabel("Spiele"); ax.set_title("Tendenz-Treffer je Spieltag (historische 
 ax.legend(); ax.grid(axis="y", alpha=.3)
 plt.tight_layout(); plt.savefig("nb_eval_per_matchday.png"); plt.show()""")
 
-md(r"""## 8. Ergebnis speichern & Fazit""")
+md(r"""## 9. Ergebnis speichern & Fazit""")
 code(r"""ev_out = ev[["Datum","Begegnung","src","lam_str","endstand","lam_err","tipp",
              "wdl_ok","modal","score_ok"]].copy()
 ev_out.to_csv("prediction_eval_log.csv", index=False)

@@ -151,19 +151,19 @@ def _to_elo(rat):
 COLLEY = _to_elo(_colley()); PAGER = _to_elo(_pagerank())
 
 # --- the five match models that yield win/draw/loss directly ---
-def model_wdl(a, b):
-    """P(Sieg/Remis/Niederlage) je Modell als dict {Name: (w, d, l)}."""
-    out = {"Poisson": wdl(a, b, STRENGTH)}
-    P = scoreline(a, b, STRENGTH, alpha)[0]
+def model_wdl(a, b, R=STRENGTH):
+    """P(Sieg/Remis/Niederlage) je Modell als dict {Name: (w, d, l)}; R = Staerke-Basis."""
+    out = {"Poisson": wdl(a, b, R)}
+    P = scoreline(a, b, R, alpha)[0]
     out["Neg.Binom"] = (np.tril(P,-1).sum(), np.trace(P), np.triu(P,1).sum())
-    da = STRENGTH[a]-STRENGTH[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
+    da = R[a]-R[b]; we = 1/(1+10**(-da/400)); pdr = pdraw(abs(da))
     out["Elo"]      = ((1-pdr)*we, pdr, (1-pdr)*(1-we))
     out["Colley"]   = wdl(a, b, COLLEY)
     out["PageRank"] = wdl(a, b, PAGER)
     return out
 MATCH_MODELS = ["Poisson", "Neg.Binom", "Elo", "Colley", "PageRank"]
-def wdl_consensus(a, b):
-    arr = np.array(list(model_wdl(a, b).values())).mean(0); return arr/arr.sum()
+def wdl_consensus(a, b, R=STRENGTH):
+    arr = np.array(list(model_wdl(a, b, R).values())).mean(0); return arr/arr.sum()
 
 SIM_MODEL = "Poisson-Tor-Sampling (Tore ~ Poisson(λ) je Team)"
 print(f"Kalibriert auf {len(M)} Spielen · λ(Gleichstärke) = {np.exp(B0):.2f} Tore · NB-α = {alpha:.3f}")
@@ -381,19 +381,19 @@ for _, m in sched[sched.played].iterrows():
 fixtures = [(m.group, m.team1, m.team2) for _, m in sched.iterrows()
             if isinstance(m.group,str) and m.group and m.team1 in STRENGTH and m.team2 in STRENGTH]
 
-def _winner(a, b):
-    la, lb = lam(a, b); x, y = rng.poisson(la), rng.poisson(lb)
+def _winner(a, b, R=STRENGTH):
+    la, lb = lam(a, b, R); x, y = rng.poisson(la), rng.poisson(lb)
     if x == y:  # K.o.: Elfmeter, leichter Vorteil für das stärkere Team
-        return a if rng.random() < 0.5 + (STRENGTH[a]-STRENGTH[b])/4000 else b
+        return a if rng.random() < 0.5 + (R[a]-R[b])/4000 else b
     return a if x > y else b
 
-def one_sim(pk=None):
+def one_sim(pk=None, R=STRENGTH):
     pk = played_key if pk is None else pk
     st = {g:{t:[0,0,0] for t in GROUPS[g]} for g in GROUPS}   # pts, gd, gf
     for g, a, b in fixtures:
         if (g,a,b) in pk: x, y = pk[(g,a,b)]
         else:
-            la, lb = lam(a,b); x, y = rng.poisson(la), rng.poisson(lb)
+            la, lb = lam(a,b,R); x, y = rng.poisson(la), rng.poisson(lb)
         st[g][a][1]+=x-y; st[g][a][2]+=x; st[g][b][1]+=y-x; st[g][b][2]+=y
         if x>y: st[g][a][0]+=3
         elif y>x: st[g][b][0]+=3
@@ -411,10 +411,10 @@ def one_sim(pk=None):
     for m, s1, s2 in R32:
         t1 = tmap[m] if s1.startswith("3:") else pos[s1]
         t2 = tmap[m] if s2.startswith("3:") else pos[s2]
-        r32_teams += [t1, t2]; win[m] = _winner(t1, t2)
+        r32_teams += [t1, t2]; win[m] = _winner(t1, t2, R)
     for grp in (R16, QF, SF):
-        for m, m1, m2 in grp: win[m] = _winner(win[m1], win[m2])
-    champ = _winner(win[FINAL[0]], win[FINAL[1]])
+        for m, m1, m2 in grp: win[m] = _winner(win[m1], win[m2], R)
+    champ = _winner(win[FINAL[0]], win[FINAL[1]], R)
     stages = {
         "r32": r32_teams,
         "r16": [win[m] for m,_,_ in R32],
@@ -605,8 +605,79 @@ cap += " · W/U/N-Konsens aus 5 Modellen · λ = erwartete Tore (Poisson)"
    .set_caption(cap))
 ''')
 
-# ── 7.5 Save timestamped results ────────────────────────────────────────────
-md(r"""## 8. Ergebnisse mit Zeitstempel speichern (zum Vergleichen)
+# ── 8. A/B: static vs running Elo ───────────────────────────────────────────
+md(r"""## 8. A/B: statische Vorab-Stärke vs. laufendes WM-Elo
+
+Alle bisherigen Match-Prognosen nutzen den **statischen** Vor-Turnier-`STRENGTH`.
+Hier der Vergleich mit einem **laufenden Elo**, das aus den **gespielten
+WM-Ergebnissen** mitläuft (Start = `STRENGTH`, K=30) — so spiegeln die Prognosen
+die aktuelle Turnierform wider, ganz **ohne manuelle Pflege** der Stärke-Werte.""")
+
+code(r'''def running_elo(prior, K=30.0):
+    e = dict(prior)
+    for _, m in grp_played.sort_values("date").iterrows():
+        h, a = m.team1, m.team2
+        if h not in e or a not in e: continue
+        gh, ga = int(m.score1), int(m.score2)
+        eh, ea = e[h], e[a]; exp = 1/(1+10**((ea-eh)/400))
+        s = 1.0 if gh>ga else (0.5 if gh==ga else 0.0)
+        e[h] += K*(s-exp); e[a] += K*((1-s)-(1-exp))
+    return e
+
+STRENGTH_LIVE = running_elo(STRENGTH)
+mov = pd.DataFrame({"Team": TEAMS, "Vorab": [STRENGTH[t] for t in TEAMS],
+                    "Laufend": [round(STRENGTH_LIVE[t]) for t in TEAMS]})
+mov["Δ Elo"] = mov.Laufend - mov.Vorab
+mov = mov.reindex(mov["Δ Elo"].abs().sort_values(ascending=False).index).head(14)
+display(mov.style.hide(axis="index").format({"Vorab":"{:.0f}","Laufend":"{:.0f}","Δ Elo":"{:+.0f}"})
+        .background_gradient(cmap="RdYlGn", subset=["Δ Elo"])
+        .set_caption("Größte Elo-Bewegungen aus den gespielten WM-Ergebnissen (laufend vs. statisch)"))
+''')
+
+md(r"""### 8.1 Nächste Spiele — statische vs. laufende Stärke""")
+code(r'''def _fav(w, a, b): return a if w[0] >= w[2] else b
+rows = []
+for _, m in upcoming.head(12).iterrows():
+    a, b = m.team1, m.team2
+    ls = lam(a, b, STRENGTH); lr = lam(a, b, STRENGTH_LIVE)
+    ws = wdl_consensus(a, b, STRENGTH); wr = wdl_consensus(a, b, STRENGTH_LIVE)
+    rows.append({"Begegnung": f"{a} – {b}",
+                 "λ statisch": f"{ls[0]:.1f} : {ls[1]:.1f}", "λ laufend": f"{lr[0]:.1f} : {lr[1]:.1f}",
+                 "Favorit stat.": _fav(ws,a,b), "Favorit lauf.": _fav(wr,a,b),
+                 "P(Sieg1) stat.": ws[0]*100, "P(Sieg1) lauf.": wr[0]*100})
+ab_next = pd.DataFrame(rows)
+(ab_next.style.hide(axis="index")
+   .format({"P(Sieg1) stat.":"{:.0f}%","P(Sieg1) lauf.":"{:.0f}%"})
+   .set_caption("Nächste Spiele: statisch vs. laufend — erwartete Tore λ, Favorit, P(Sieg erstgenannt)"))
+''')
+
+md(r"""### 8.2 Titelchancen — statische vs. laufende Stärke (je eigene Simulation)""")
+code(r'''def title_odds(R, n=6000):
+    c = np.zeros(len(TEAMS))
+    for _ in range(n): c[ix[one_sim(played_key, R)["champ"][0]]] += 1
+    return c/n*100
+
+N_AB = 6000
+ts = title_odds(STRENGTH, N_AB); tl = title_odds(STRENGTH_LIVE, N_AB)
+abt = pd.DataFrame({"Team": TEAMS, "statisch": ts, "laufend": tl})
+abt["Δ"] = abt.laufend - abt.statisch
+abt = abt.sort_values("laufend", ascending=False).head(12).reset_index(drop=True)
+display(abt.style.hide(axis="index").format({"statisch":"{:.1f}%","laufend":"{:.1f}%","Δ":"{:+.1f}"})
+        .background_gradient(cmap="RdYlGn", subset=["Δ"])
+        .set_caption(f"Titelchancen: statisch vs. laufend · {N_AB:,} Simulationen je Variante"))
+
+top = abt.iloc[::-1]; yy = np.arange(len(top)); w = 0.4
+fig, ax = plt.subplots(figsize=(10, 7.5))
+ax.barh(yy-w/2, top.statisch, w, color=GREY, label="statisch (Vorab)")
+ax.barh(yy+w/2, top.laufend,  w, color=NAVY, label="laufend (WM-Elo)")
+ax.set_yticks(yy); ax.set_yticklabels(top.Team); ax.set_xlabel("Titelwahrscheinlichkeit (%)")
+ax.set_title("WM-2026-Titelchancen: statische Vorab-Stärke vs. laufendes WM-Elo", loc="left")
+ax.legend(); ax.grid(axis="x", alpha=.3)
+plt.tight_layout(); plt.savefig("nb_live_ab_title.png"); plt.show()
+''')
+
+# ── 9. Save timestamped results ─────────────────────────────────────────────
+md(r"""## 9. Ergebnisse mit Zeitstempel speichern (zum Vergleichen)
 
 Jeder Lauf wird unter `results/<Zeitstempel>_*.csv` abgelegt — Tabellen,
 Prognosen, Wahrscheinlichkeiten und Bracket. Zusätzlich wird die Titelchance je
@@ -648,14 +719,14 @@ else:
 ''')
 
 # ── 9. What to update ───────────────────────────────────────────────────────
-md(r"""## 9. Was muss aktualisiert werden?
+md(r"""## 10. Was muss aktualisiert werden?
 
 Damit die Prognosen aktuell und korrekt bleiben:
 
 | Was | Wie | Wann |
 |-----|-----|------|
 | **Gespielte Ergebnisse** | `python refresh_data.py` (lädt `data/wc2026_results.csv` neu) → Notebook neu ausführen | nach jedem Spieltag |
-| **Team-Stärken** (`STRENGTH`) | aktuelle Werte von [eloratings.net](https://www.eloratings.net/) eintragen | vor dem Turnier & bei Bedarf |
+| **Team-Stärken** (`STRENGTH`) | optional von [eloratings.net](https://www.eloratings.net/) auffrischen — **oder** das **laufende Elo aus §8** nutzen (aktualisiert sich automatisch aus den Ergebnissen, kein Hand-Pflegen) | optional |
 | **Playoff-Sieger** (März 2026) | falls abweichend, in `GROUPS`/`STRENGTH` korrigieren (hier: Czechia, Bosnia-Herzegovina, Türkiye, Sweden, Iraq, Congo DR) | einmalig, sobald bekannt |
 | **K.-o.-Resultate mit Verlängerung/Elfmeter** | openfootball führt den 90-Minuten-Stand; Sieger eines im Elfmeterschießen entschiedenen Spiels ggf. manuell setzen | in der K.-o.-Phase |
 | **Trainingsdaten** (optional) | `python refresh_data.py --training` → `data/*_refreshed.csv` prüfen und ersetzen | selten |
@@ -664,7 +735,7 @@ Damit die Prognosen aktuell und korrekt bleiben:
 Das meiste erledigt **`refresh_data.py`** automatisch. Nach dem Aktualisieren
 einfach *Run All* — Tabellen, Prognosen und Titelchancen rechnen sich neu.""")
 
-md(r"""## 10. Können die Datendateien heruntergeladen werden?
+md(r"""## 11. Können die Datendateien heruntergeladen werden?
 
 **Ja.** Alle Daten stammen aus dem öffentlichen **openfootball**-Projekt (Public
 Domain) und werden über `raw.githubusercontent.com` geladen:
