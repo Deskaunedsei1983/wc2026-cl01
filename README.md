@@ -41,6 +41,8 @@ All eleven are reduced to a common `P(win/draw/loss)` interface and run through 
 
 ## Quick start
 
+> **Use Python 3.11 or 3.12** (a fresh virtualenv is ideal). Python 3.14 is too new — some wheels (including a working `pandas`) aren't built for it yet, which shows up as `ModuleNotFoundError: No module named 'pandas.io.formats.string'` on any table display. `pandas` is pinned `< 3.0` for ecosystem compatibility.
+
 ```bash
 pip install -r requirements.txt
 
