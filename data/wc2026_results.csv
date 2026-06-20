@@ -13,14 +13,14 @@ date,round,group,team1,team2,score1,score2,knockout
 2026-06-24,Matchday 14,B,Bosnia-Herzegovina,Qatar,,,FALSE
 2026-06-13,Matchday 3,C,Brazil,Morocco,1,1,FALSE
 2026-06-13,Matchday 3,C,Haiti,Scotland,0,1,FALSE
-2026-06-19,Matchday 9,C,Scotland,Morocco,,,FALSE
-2026-06-19,Matchday 9,C,Brazil,Haiti,,,FALSE
+2026-06-19,Matchday 9,C,Scotland,Morocco,0,1,FALSE
+2026-06-19,Matchday 9,C,Brazil,Haiti,3,0,FALSE
 2026-06-24,Matchday 14,C,Scotland,Brazil,,,FALSE
 2026-06-24,Matchday 14,C,Morocco,Haiti,,,FALSE
 2026-06-12,Matchday 2,D,United States,Paraguay,4,1,FALSE
 2026-06-13,Matchday 3,D,Australia,Türkiye,2,0,FALSE
 2026-06-19,Matchday 9,D,United States,Australia,2,0,FALSE
-2026-06-19,Matchday 9,D,Türkiye,Paraguay,,,FALSE
+2026-06-19,Matchday 9,D,Türkiye,Paraguay,0,1,FALSE
 2026-06-25,Matchday 15,D,Türkiye,United States,,,FALSE
 2026-06-25,Matchday 15,D,Paraguay,Australia,,,FALSE
 2026-06-14,Matchday 4,E,Germany,Curacao,7,1,FALSE

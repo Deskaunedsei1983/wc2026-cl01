@@ -275,14 +275,14 @@ exakten Ergebnis (Poisson). K.-o.-Paarungen erscheinen erst nach der
 Gruppenphase als echte Teams (bis dahin Platzhalter wie `2A`, `W74`) — ihre
 Prognose steht in Abschnitt 7.""")
 
-code(r'''def next_matches(sched, k=None):
+code(r'''def next_matches(sched, k=None, R=STRENGTH):
     up = sched[~sched.played].copy()
     up = up[up.team1.isin(STRENGTH) & up.team2.isin(STRENGTH)].sort_values("date")
     if k: up = up.head(k)
     out = []
     for _, m in up.iterrows():
-        a, b = m.team1, m.team2; w, d, l = wdl_consensus(a, b)
-        la, lb = lam(a, b); s, p = modal_score(a, b)
+        a, b = m.team1, m.team2; w, d, l = wdl_consensus(a, b, R)
+        la, lb = lam(a, b, R); s, p = modal_score(a, b, R)
         tag = m.group if isinstance(m.group,str) and m.group else m["round"]
         out.append({"Datum":m.date,"Runde":tag,"Begegnung":f"{a} – {b}",
                     "Ø Tore (λ)":f"{la:.1f} : {lb:.1f}",
@@ -426,22 +426,25 @@ def one_sim(pk=None, R=STRENGTH):
     }
     return stages
 
-N_SIM = 8000
-keys = ["r32","r16","qf","sf","final","champ","gw"]
-cnt = {k: np.zeros(len(TEAMS)) for k in keys}
-for _ in range(N_SIM):
-    s = one_sim()
-    for k in keys:
-        for t in s[k]: cnt[k][ix[t]] += 1
+SIM_KEYS = ["r32","r16","qf","sf","final","champ","gw"]
+def run_full_sim(R, N):
+    # eine volle Turnier-Simulation mit Stärke-Basis R -> Wahrscheinlichkeiten je Team
+    cnt = {k: np.zeros(len(TEAMS)) for k in SIM_KEYS}
+    for _ in range(N):
+        s = one_sim(played_key, R)
+        for k in SIM_KEYS:
+            for t in s[k]: cnt[k][ix[t]] += 1
+    df = pd.DataFrame({"Team": TEAMS, "Stärke":[round(R[t]) for t in TEAMS]})
+    df["Achtelfinale (R32)"] = cnt["r32"]/N*100
+    df["R16"]   = cnt["r16"]/N*100
+    df["Viertelfinale"] = cnt["qf"]/N*100
+    df["Halbfinale"]    = cnt["sf"]/N*100
+    df["Finale"]        = cnt["final"]/N*100
+    df["Titel"]         = cnt["champ"]/N*100
+    return df.sort_values("Titel", ascending=False).reset_index(drop=True)
 
-prob = pd.DataFrame({"Team": TEAMS, "Stärke":[STRENGTH[t] for t in TEAMS]})
-prob["Achtelfinale (R32)"] = cnt["r32"]/N_SIM*100
-prob["R16"]   = cnt["r16"]/N_SIM*100
-prob["Viertelfinale"] = cnt["qf"]/N_SIM*100
-prob["Halbfinale"]    = cnt["sf"]/N_SIM*100
-prob["Finale"]        = cnt["final"]/N_SIM*100
-prob["Titel"]         = cnt["champ"]/N_SIM*100
-prob = prob.sort_values("Titel", ascending=False).reset_index(drop=True)
+N_SIM = 8000
+prob = run_full_sim(STRENGTH, N_SIM)
 print(f"{N_SIM:,} Simulationen abgeschlossen.")
 ''')
 
@@ -564,21 +567,21 @@ Diese Funktion projiziert mit den **aktuell wahrscheinlichsten** Platzierungen
 (gespielte Ergebnisse + wahrscheinlichstes Ergebnis der Restspiele) das
 Round-of-32 und sagt jede Partie voraus. **Sind alle Gruppenspiele gespielt, ist
 das die echte K.-o.-Runde** — derselbe Code, dann ohne Projektion.""")
-code(r'''def project_bracket(sched):
+code(r'''def project_bracket(sched, R=STRENGTH):
     st = {g:{t:[0,0,0] for t in GROUPS[g]} for g in GROUPS}
     for g, a, b in fixtures:
         if (g,a,b) in played_key: x, y = played_key[(g,a,b)]
         else:
-            P, la, lb = scoreline(a, b); n=P.shape[0]; i,j = divmod(int(np.argmax(P)), n); x,y=i,j
+            P, la, lb = scoreline(a, b, R); n=P.shape[0]; i,j = divmod(int(np.argmax(P)), n); x,y=i,j
         st[g][a][1]+=x-y; st[g][a][2]+=x; st[g][b][1]+=y-x; st[g][b][2]+=y
         if x>y: st[g][a][0]+=3
         elif y>x: st[g][b][0]+=3
         else: st[g][a][0]+=1; st[g][b][0]+=1
     pos = {}; thirds = []
     for g in GROUPS:
-        order = sorted(GROUPS[g], key=lambda t:(st[g][t][0],st[g][t][1],st[g][t][2],STRENGTH[t]), reverse=True)
+        order = sorted(GROUPS[g], key=lambda t:(st[g][t][0],st[g][t][1],st[g][t][2],R[t]), reverse=True)
         pos[f"1{g}"], pos[f"2{g}"] = order[0], order[1]
-        s = st[g][order[2]]; thirds.append((g, order[2], s[0], s[1], s[2], STRENGTH[order[2]]))
+        s = st[g][order[2]]; thirds.append((g, order[2], s[0], s[1], s[2], R[order[2]]))
     thirds.sort(key=lambda r:(r[2],r[3],r[4],r[5]), reverse=True)
     best8 = [(g,t) for g,t,*_ in thirds[:8]]
     tmap = assign_thirds(best8)
@@ -586,7 +589,7 @@ code(r'''def project_bracket(sched):
     for m, s1, s2 in R32:
         t1 = tmap[m] if s1.startswith("3:") else pos[s1]
         t2 = tmap[m] if s2.startswith("3:") else pos[s2]
-        w, d, l = wdl_consensus(t1, t2); s, p = modal_score(t1, t2); la, lb = lam(t1, t2)
+        w, d, l = wdl_consensus(t1, t2, R); s, p = modal_score(t1, t2, R); la, lb = lam(t1, t2, R)
         fav = t1 if w>=l else t2
         rows.append({"R32":m,"Begegnung":f"{t1} – {t2}","Ø Tore (λ)":f"{la:.1f} : {lb:.1f}",
                      "P(Sieg 1)":w*100,"P(Remis)":d*100,
@@ -652,21 +655,20 @@ ab_next = pd.DataFrame(rows)
 ''')
 
 md(r"""### 8.2 Titelchancen — statische vs. laufende Stärke (je eigene Simulation)""")
-code(r'''def title_odds(R, n=6000):
-    c = np.zeros(len(TEAMS))
-    for _ in range(n): c[ix[one_sim(played_key, R)["champ"][0]]] += 1
-    return c/n*100
+code(r'''# volle Lauf-Variante mit laufendem Elo (unten auch separat gespeichert)
+prob_live    = run_full_sim(STRENGTH_LIVE, N_SIM)
+nxt_live     = next_matches(sched, R=STRENGTH_LIVE)
+bracket_live = project_bracket(sched, R=STRENGTH_LIVE)
 
-N_AB = 6000
-ts = title_odds(STRENGTH, N_AB); tl = title_odds(STRENGTH_LIVE, N_AB)
-abt = pd.DataFrame({"Team": TEAMS, "statisch": ts, "laufend": tl})
-abt["Δ"] = abt.laufend - abt.statisch
-abt = abt.sort_values("laufend", ascending=False).head(12).reset_index(drop=True)
-display(abt.style.hide(axis="index").format({"statisch":"{:.1f}%","laufend":"{:.1f}%","Δ":"{:+.1f}"})
+cmp = (prob[["Team","Titel"]].rename(columns={"Titel":"statisch"})
+       .merge(prob_live[["Team","Titel"]].rename(columns={"Titel":"laufend"}), on="Team"))
+cmp["Δ"] = cmp.laufend - cmp.statisch
+cmp = cmp.sort_values("laufend", ascending=False).head(12).reset_index(drop=True)
+display(cmp.style.hide(axis="index").format({"statisch":"{:.1f}%","laufend":"{:.1f}%","Δ":"{:+.1f}"})
         .background_gradient(cmap="RdYlGn", subset=["Δ"])
-        .set_caption(f"Titelchancen: statisch vs. laufend · {N_AB:,} Simulationen je Variante"))
+        .set_caption(f"Titelchancen: statisch vs. laufend · je {N_SIM:,} Simulationen"))
 
-top = abt.iloc[::-1]; yy = np.arange(len(top)); w = 0.4
+top = cmp.iloc[::-1]; yy = np.arange(len(top)); w = 0.4
 fig, ax = plt.subplots(figsize=(10, 7.5))
 ax.barh(yy-w/2, top.statisch, w, color=GREY, label="statisch (Vorab)")
 ax.barh(yy+w/2, top.laufend,  w, color=NAVY, label="laufend (WM-Elo)")
@@ -680,9 +682,11 @@ plt.tight_layout(); plt.savefig("nb_live_ab_title.png"); plt.show()
 md(r"""## 9. Ergebnisse mit Zeitstempel speichern (zum Vergleichen)
 
 Jeder Lauf wird unter `results/<Zeitstempel>_*.csv` abgelegt — Tabellen,
-Prognosen, Wahrscheinlichkeiten und Bracket. Zusätzlich wird die Titelchance je
-Team an `results/title_history.csv` angehängt, sodass man die Entwicklung über
-mehrere Läufe (Spieltage) direkt vergleichen kann.""")
+Prognosen, Wahrscheinlichkeiten und Bracket, **jeweils in beiden Varianten**:
+statisch (Vorab-Stärke) **und** `_live` (laufendes WM-Elo). Zusätzlich werden die
+Titelchancen je Team an `results/title_history.csv` (statisch) und
+`results/title_history_live.csv` (laufend) angehängt, sodass man die Entwicklung
+über mehrere Läufe **und** den Effekt der laufenden Stärke direkt vergleichen kann.""")
 code(r'''from datetime import datetime
 RESULTS = Path("results"); RESULTS.mkdir(exist_ok=True)
 STAMP = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
@@ -695,18 +699,21 @@ meta = pd.Series({
 saved = []
 for name, df in [("standings", tables), ("next_matches", nxt), ("probabilities", prob),
                  ("bracket", bracket), ("title_evolution", evolution),
-                 ("advance_evolution", advance_evolution)]:
+                 ("advance_evolution", advance_evolution),
+                 ("next_matches_live", nxt_live), ("probabilities_live", prob_live),
+                 ("bracket_live", bracket_live)]:
     fp = RESULTS / f"{STAMP}_{name}.csv"; df.to_csv(fp, index=False); saved.append(fp.name)
 meta.to_csv(RESULTS / f"{STAMP}_run_info.csv", header=False)
 
-# long-format title history for easy time comparison
-hist = prob[["Team", "Titel"]].copy(); hist.insert(0, "run", STAMP)
+# long-format title history — beide Varianten getrennt — für den Zeitvergleich
+for src_df, fn in [(prob, "title_history.csv"), (prob_live, "title_history_live.csv")]:
+    h = src_df[["Team", "Titel"]].copy(); h.insert(0, "run", STAMP)
+    hp = RESULTS / fn; h.to_csv(hp, mode="a", header=not hp.exists(), index=False)
 hpath = RESULTS / "title_history.csv"
-hist.to_csv(hpath, mode="a", header=not hpath.exists(), index=False)
 
-print(f"Lauf {STAMP} gespeichert in results/:")
+print(f"Lauf {STAMP} gespeichert in results/  ({len(saved)} Dateien, statisch + _live):")
 for s in saved + [f"{STAMP}_run_info.csv"]: print("   -", s)
-print("   - title_history.csv  (Titelchancen angehängt — eine Zeile je Team und Lauf)")
+print("   - title_history.csv / title_history_live.csv  (Titelchancen je Variante & Lauf)")
 
 # Vergleich: wie haben sich die Titelchancen über die bisherigen Läufe entwickelt?
 comp = (pd.read_csv(hpath).pivot_table(index="Team", columns="run", values="Titel")
