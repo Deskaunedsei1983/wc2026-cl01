@@ -41,6 +41,8 @@ All eleven are reduced to a common `P(win/draw/loss)` interface and run through 
 
 ## Quick start
 
+> **Use Python 3.11 or 3.12** (a fresh virtualenv is ideal). Python 3.14 is too new — some wheels (including a working `pandas`) aren't built for it yet, which shows up as `ModuleNotFoundError: No module named 'pandas.io.formats.string'` on any table display. `pandas` is pinned `< 3.0` for ecosystem compatibility.
+
 ```bash
 pip install -r requirements.txt
 
@@ -53,6 +55,37 @@ python build_article2_extras.py  # model-agreement heatmap + pipeline schematic
 
 The notebook [`world_cup_2026_prediction.ipynb`](world_cup_2026_prediction.ipynb) walks through the single-model version step by step.
 
+For **match win/draw/loss predictions** and a **goal-to-goal (exact-scoreline) analysis** — correct-score heatmaps, expected goals, most-likely results, over/under and BTTS, a **per-algorithm most-likely-scoreline table for all 72 group matches** (`group_match_scorelines.csv`), plus the consensus title simulation — see [`wc2026_match_and_scoreline_analysis.ipynb`](wc2026_match_and_scoreline_analysis.ipynb):
+
+```bash
+jupyter nbconvert --to notebook --execute --inplace wc2026_match_and_scoreline_analysis.ipynb
+# or just open it in Jupyter and Run All. Regenerate the notebook with: python build_nb.py
+```
+
+**During the tournament**, [`wc2026_live_update.ipynb`](wc2026_live_update.ipynb) pulls the **actual 2026 results** (live from openfootball, public domain), shows current group standings, predicts the upcoming matches, resolves the **official knockout bracket** (Round of 32 → final) once the groups are decided, and re-computes every team's advance/title probability with a hybrid Monte Carlo (played results fixed, the rest simulated):
+
+```bash
+python refresh_data.py           # download the latest 2026 results -> data/wc2026_results.csv
+jupyter nbconvert --to notebook --execute --inplace wc2026_live_update.ipynb
+# Re-run both after each matchday. Regenerate the notebook with: python build_live_nb.py
+```
+
+For a full **ML/DL benchmark suite** — ~16 models (classics, five GBDTs, PyTorch DNN / FT-Transformer / TabNet) **auto-tuned with Optuna** (TPE + Hyperband) under RAM/VRAM guardrails, **validated against the already-played WM 2026 results** (auto-selected champion by WDL accuracy), then a Monte-Carlo of the 48-team tournament — see [`wc2026_advanced_gpu_benchmark_suite.ipynb`](wc2026_advanced_gpu_benchmark_suite.ipynb):
+
+```bash
+pip install optuna lightgbm catboost torch pytorch-tabnet psutil   # advanced-suite extras
+jupyter nbconvert --to notebook --execute --inplace wc2026_advanced_gpu_benchmark_suite.ipynb
+# CPU is fine (< 1 GB RAM, < 2 min). Regenerate with: python build_benchmark_nb.py
+```
+
+To **score the forecasts against reality**, [`wc2026_prediction_eval.ipynb`](wc2026_prediction_eval.ipynb) lines up the live notebook's per-match predictions chronologically against the real played results and reports the quality: win/draw/loss tendency hit-rate (✓/✗), exact-scoreline hit-rate, expected-goals (λ) error, plus Brier/log-loss and calibration charts:
+
+```bash
+jupyter nbconvert --to notebook --execute --inplace wc2026_prediction_eval.ipynb
+# Uses results/*_next_matches.csv if present, else reproduces with the same model.
+# Regenerate with: python build_eval_nb.py
+```
+
 ## Repository layout
 
 ```
@@ -60,6 +93,12 @@ wc2026_simple_model.py      # single Elo + Poisson + Monte Carlo model
 wc2026_model_suite.py       # the eleven-model suite
 make_charts.py / add_article_charts.py / build_article2_extras.py  # figures
 world_cup_2026_prediction.ipynb  # annotated notebook (single model)
+wc2026_match_and_scoreline_analysis.ipynb  # win/draw/loss + goal-to-goal scoreline analysis + title sim
+wc2026_live_update.ipynb    # in-tournament: live results, standings, knockout bracket, updated odds
+wc2026_advanced_gpu_benchmark_suite.ipynb  # ~16-model ML/DL benchmark + Optuna tuning + Monte-Carlo
+wc2026_prediction_eval.ipynb  # backtest: live forecasts vs real results (WDL/scoreline/lambda quality)
+build_nb.py / build_live_nb.py / build_benchmark_nb.py / build_eval_nb.py   # rebuild the analysis notebooks
+refresh_data.py             # download latest results from openfootball -> data/*.csv
 data/                       # match data (public domain) + SOURCES.md
 model_title_probabilities.csv, model_picks.csv, classifier_cv_metrics.csv  # results
 *.png                       # generated figures

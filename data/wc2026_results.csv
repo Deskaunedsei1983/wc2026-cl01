@@ -1,0 +1,105 @@
+date,round,group,team1,team2,score1,score2,knockout
+2026-06-11,Matchday 1,A,Mexico,South Africa,2,0,FALSE
+2026-06-11,Matchday 1,A,South Korea,Czechia,2,1,FALSE
+2026-06-18,Matchday 8,A,Czechia,South Africa,1,1,FALSE
+2026-06-18,Matchday 8,A,Mexico,South Korea,1,0,FALSE
+2026-06-24,Matchday 14,A,Czechia,Mexico,,,FALSE
+2026-06-24,Matchday 14,A,South Africa,South Korea,,,FALSE
+2026-06-12,Matchday 2,B,Canada,Bosnia-Herzegovina,1,1,FALSE
+2026-06-13,Matchday 3,B,Qatar,Switzerland,1,1,FALSE
+2026-06-18,Matchday 8,B,Switzerland,Bosnia-Herzegovina,4,1,FALSE
+2026-06-18,Matchday 8,B,Canada,Qatar,6,0,FALSE
+2026-06-24,Matchday 14,B,Switzerland,Canada,,,FALSE
+2026-06-24,Matchday 14,B,Bosnia-Herzegovina,Qatar,,,FALSE
+2026-06-13,Matchday 3,C,Brazil,Morocco,1,1,FALSE
+2026-06-13,Matchday 3,C,Haiti,Scotland,0,1,FALSE
+2026-06-19,Matchday 9,C,Scotland,Morocco,0,1,FALSE
+2026-06-19,Matchday 9,C,Brazil,Haiti,3,0,FALSE
+2026-06-24,Matchday 14,C,Scotland,Brazil,,,FALSE
+2026-06-24,Matchday 14,C,Morocco,Haiti,,,FALSE
+2026-06-12,Matchday 2,D,United States,Paraguay,4,1,FALSE
+2026-06-13,Matchday 3,D,Australia,Türkiye,2,0,FALSE
+2026-06-19,Matchday 9,D,United States,Australia,2,0,FALSE
+2026-06-19,Matchday 9,D,Türkiye,Paraguay,0,1,FALSE
+2026-06-25,Matchday 15,D,Türkiye,United States,,,FALSE
+2026-06-25,Matchday 15,D,Paraguay,Australia,,,FALSE
+2026-06-14,Matchday 4,E,Germany,Curacao,7,1,FALSE
+2026-06-14,Matchday 4,E,Ivory Coast,Ecuador,1,0,FALSE
+2026-06-20,Matchday 10,E,Germany,Ivory Coast,,,FALSE
+2026-06-20,Matchday 10,E,Ecuador,Curacao,,,FALSE
+2026-06-25,Matchday 15,E,Curacao,Ivory Coast,,,FALSE
+2026-06-25,Matchday 15,E,Ecuador,Germany,,,FALSE
+2026-06-14,Matchday 4,F,Netherlands,Japan,2,2,FALSE
+2026-06-14,Matchday 4,F,Sweden,Tunisia,5,1,FALSE
+2026-06-20,Matchday 10,F,Netherlands,Sweden,,,FALSE
+2026-06-20,Matchday 10,F,Tunisia,Japan,,,FALSE
+2026-06-25,Matchday 15,F,Japan,Sweden,,,FALSE
+2026-06-25,Matchday 15,F,Tunisia,Netherlands,,,FALSE
+2026-06-15,Matchday 5,G,Belgium,Egypt,1,1,FALSE
+2026-06-15,Matchday 5,G,Iran,New Zealand,2,2,FALSE
+2026-06-21,Matchday 11,G,Belgium,Iran,,,FALSE
+2026-06-21,Matchday 11,G,New Zealand,Egypt,,,FALSE
+2026-06-26,Matchday 16,G,Egypt,Iran,,,FALSE
+2026-06-26,Matchday 16,G,New Zealand,Belgium,,,FALSE
+2026-06-15,Matchday 5,H,Spain,Cape Verde,0,0,FALSE
+2026-06-15,Matchday 5,H,Saudi Arabia,Uruguay,1,1,FALSE
+2026-06-21,Matchday 11,H,Spain,Saudi Arabia,,,FALSE
+2026-06-21,Matchday 11,H,Uruguay,Cape Verde,,,FALSE
+2026-06-26,Matchday 16,H,Cape Verde,Saudi Arabia,,,FALSE
+2026-06-26,Matchday 16,H,Uruguay,Spain,,,FALSE
+2026-06-16,Matchday 6,I,France,Senegal,3,1,FALSE
+2026-06-16,Matchday 6,I,Iraq,Norway,1,4,FALSE
+2026-06-22,Matchday 12,I,France,Iraq,,,FALSE
+2026-06-22,Matchday 12,I,Norway,Senegal,,,FALSE
+2026-06-26,Matchday 16,I,Norway,France,,,FALSE
+2026-06-26,Matchday 16,I,Senegal,Iraq,,,FALSE
+2026-06-16,Matchday 6,J,Argentina,Algeria,3,0,FALSE
+2026-06-16,Matchday 6,J,Austria,Jordan,3,1,FALSE
+2026-06-22,Matchday 12,J,Argentina,Austria,,,FALSE
+2026-06-22,Matchday 12,J,Jordan,Algeria,,,FALSE
+2026-06-27,Matchday 17,J,Algeria,Austria,,,FALSE
+2026-06-27,Matchday 17,J,Jordan,Argentina,,,FALSE
+2026-06-17,Matchday 7,K,Portugal,Congo DR,1,1,FALSE
+2026-06-17,Matchday 7,K,Uzbekistan,Colombia,1,3,FALSE
+2026-06-23,Matchday 13,K,Portugal,Uzbekistan,,,FALSE
+2026-06-23,Matchday 13,K,Colombia,Congo DR,,,FALSE
+2026-06-27,Matchday 17,K,Colombia,Portugal,,,FALSE
+2026-06-27,Matchday 17,K,Congo DR,Uzbekistan,,,FALSE
+2026-06-17,Matchday 7,L,England,Croatia,4,2,FALSE
+2026-06-17,Matchday 7,L,Ghana,Panama,1,0,FALSE
+2026-06-23,Matchday 13,L,England,Ghana,,,FALSE
+2026-06-23,Matchday 13,L,Panama,Croatia,,,FALSE
+2026-06-27,Matchday 17,L,Panama,England,,,FALSE
+2026-06-27,Matchday 17,L,Croatia,Ghana,,,FALSE
+2026-06-28,Round of 32,,2A,2B,,,TRUE
+2026-06-29,Round of 32,,1E,3A/B/C/D/F,,,TRUE
+2026-06-29,Round of 32,,1F,2C,,,TRUE
+2026-06-29,Round of 32,,1C,2F,,,TRUE
+2026-06-30,Round of 32,,1I,3C/D/F/G/H,,,TRUE
+2026-06-30,Round of 32,,2E,2I,,,TRUE
+2026-06-30,Round of 32,,1A,3C/E/F/H/I,,,TRUE
+2026-07-01,Round of 32,,1L,3E/H/I/J/K,,,TRUE
+2026-07-01,Round of 32,,1D,3B/E/F/I/J,,,TRUE
+2026-07-01,Round of 32,,1G,3A/E/H/I/J,,,TRUE
+2026-07-02,Round of 32,,2K,2L,,,TRUE
+2026-07-02,Round of 32,,1H,2J,,,TRUE
+2026-07-02,Round of 32,,1B,3E/F/G/I/J,,,TRUE
+2026-07-03,Round of 32,,1J,2H,,,TRUE
+2026-07-03,Round of 32,,1K,3D/E/I/J/L,,,TRUE
+2026-07-03,Round of 32,,2D,2G,,,TRUE
+2026-07-04,Round of 16,,W74,W77,,,TRUE
+2026-07-04,Round of 16,,W73,W75,,,TRUE
+2026-07-05,Round of 16,,W76,W78,,,TRUE
+2026-07-05,Round of 16,,W79,W80,,,TRUE
+2026-07-06,Round of 16,,W83,W84,,,TRUE
+2026-07-06,Round of 16,,W81,W82,,,TRUE
+2026-07-07,Round of 16,,W86,W88,,,TRUE
+2026-07-07,Round of 16,,W85,W87,,,TRUE
+2026-07-09,Quarter-final,,W89,W90,,,TRUE
+2026-07-10,Quarter-final,,W93,W94,,,TRUE
+2026-07-11,Quarter-final,,W91,W92,,,TRUE
+2026-07-11,Quarter-final,,W95,W96,,,TRUE
+2026-07-14,Semi-final,,W97,W98,,,TRUE
+2026-07-15,Semi-final,,W99,W100,,,TRUE
+2026-07-18,Match for third place,,L101,L102,,,TRUE
+2026-07-19,Final,,W101,W102,,,TRUE
